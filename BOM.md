@@ -9,26 +9,26 @@ The whole thing comes in well under $100.
 | # | Part | Spec | Qty | ~CAD | Where / notes |
 |---|------|------|----:|----:|----------------|
 | **Compute** |
-| 1 | Raspberry Pi Zero 2 W | quad core A53, WiFi/BT, 40 pin | 1 | $22 | you will need to solder on a 40 pin header |
-| 2 | microSD card | 16 to 32 GB, Class 10 / A1 | 1 | $8 | I run Raspberry Pi OS Lite (64 bit) |
-| 3 | 2x20 GPIO header | 0.1 inch male | 1 | $1 | skip if your Pi already has one |
+| 1 | Raspberry Pi Zero 2 W | quad core A53, WiFi/BT, 40 pin | 1 | $22 | [Adafruit (no header)](https://www.adafruit.com/product/5291) · [Adafruit (header pre-soldered)](https://www.adafruit.com/product/6008) — you will need to solder on a 40 pin header if you get the bare board |
+| 2 | microSD card | 16 to 32 GB, Class 10 / A1 | 1 | $8 | any brand; I run Raspberry Pi OS Lite (64 bit) |
+| 3 | 2x20 GPIO header | 0.1 inch male | 1 | $1 | [Amazon (10-pack)](https://www.amazon.com/Break-Away-2x20-pin-Strip-Header-Raspberry/dp/B0756KM7CY) — skip if your Pi already has one |
 | **Actuation** |
-| 4 | Feetech SCS0009 serial servo | half duplex UART 1 Mbps, 9 g, 1.5 kg·cm, 4 to 6 V (run ~5.1 V), 300° (same as Waveshare SC09) | 2 | $5 to 6 ea | I bought mine in bulk on AliExpress |
-| 5 | 1 kΩ resistor | ¼ W | 1 | pennies | for the servo half duplex line |
+| 4 | Feetech SCS0009 serial servo | half duplex UART 1 Mbps, 9 g, 1.5 kg·cm, 4 to 6 V (run ~5.1 V), 300° (same as Waveshare SC09) | 2 | $5 to 6 ea | [AliExpress](https://www.aliexpress.com/item/1005009980824534.html) — also available in [12-packs](https://www.aliexpress.com/item/1005010313759367.html) |
+| 5 | 1 kΩ resistor | ¼ W | 1 | pennies | any electronics supplier or grab a resistor kit on AliExpress — for the servo half duplex line |
 | **Sensing** |
-| 6 | MPU-6050 IMU (GY-521) | I²C 0x68, 6 axis, 3.3 V | 1 | $3 | |
-| 7 | OV5647 camera (Pi Zero) | 5 MP, narrow 22 to 15 pin CSI ribbon | 1 | $12 | get the Pi Zero version with the narrow ribbon, not the standard one |
-| 8 | INMP441 I²S mic | 3.3 V, 24 bit | 1 | $4 | |
+| 6 | MPU-6050 IMU (GY-521) | I²C 0x68, 6 axis, 3.3 V | 1 | $3 | [AliExpress](https://www.aliexpress.com/item/32340949017.html) |
+| 7 | OV5647 camera (Pi Zero) | 5 MP, narrow 22 to 15 pin CSI ribbon | 1 | $12 | [AliExpress — Pi Zero version](https://www.aliexpress.com/item/2251832596186902.html) — get the Pi Zero version with the narrow ribbon, not the standard one |
+| 8 | INMP441 I²S mic | 3.3 V, 24 bit | 1 | $4 | [AliExpress](https://www.aliexpress.com/item/32962426410.html) |
 | **Voice and lights** |
-| 9 | MAX98357A I²S amp | 3.2 W class D mono | 1 | $5 | |
-| 10 | speaker | 8 Ω, 0.5 to 3 W, small | 1 | $2 | |
-| 11 | WS2812B LED ring | 7 pixels, 5 V | 1 | $3 | |
+| 9 | MAX98357A I²S amp | 3.2 W class D mono | 1 | $5 | [AliExpress](https://www.aliexpress.com/item/1005008455683459.html) · [Adafruit](https://www.adafruit.com/product/3006) |
+| 10 | speaker | 8 Ω, 0.5 to 3 W, small | 1 | $2 | [AliExpress search](https://www.aliexpress.com/w/wholesale-8ohm-speaker-small.html) — any small 8 Ω driver fits |
+| 11 | WS2812B LED ring | 7 pixels, 5 V | 1 | $3 | [eBay (has 7-way option)](https://www.ebay.com/itm/254302794898) · [AliExpress (8-pixel is the closest common size)](https://www.aliexpress.com/item/1005002287819725.html) |
 | **Power** |
-| 12 | 1S LiPo or 18650 cell | 3.7 V, 800 to 1200 mAh | 1 | $4 | whatever you have on hand |
-| 13 | TP4056 module | USB-C, charge and protect | 1 | $1 | get the protected version with OUT+/OUT- |
-| 14 | MT3608 boost module | step up, set to about 5.1 V | 1 | pennies | |
-| 15 | electrolytic cap | 470 to 1000 µF, 10 V or higher | 1 | pennies | goes across the 5 V rail at the servos |
-| 16 | SPST power switch | | 1 | pennies | |
+| 12 | 1S LiPo or 18650 cell | 3.7 V, 800 to 1200 mAh | 1 | $4 | [AliExpress search](https://www.aliexpress.com/w/wholesale-lipo-battery-3.7v-jst.html) — whatever you have on hand |
+| 13 | TP4056 module | USB-C, charge and protect | 1 | $1 | [AliExpress](https://www.aliexpress.com/item/32930640893.html) — get the protected version with OUT+/OUT- |
+| 14 | MT3608 boost module | step up, set to about 5.1 V | 1 | pennies | [AliExpress](https://www.aliexpress.com/item/32450571426.html) |
+| 15 | electrolytic cap | 470 to 1000 µF, 10 V or higher | 1 | pennies | any electronics supplier — goes across the 5 V rail at the servos |
+| 16 | SPST power switch | | 1 | pennies | [AliExpress search](https://www.aliexpress.com/w/wholesale-spst-mini-toggle-switch.html) |
 | | | | | **~$77 CAD** | about $56 USD |
 
 ## Also needed (not electronics)
