@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GrowBot body — conformance test</title>
+<style>
+  :root{ --ok:#2bbf7a; --bad:#e25563; --warn:#e0a93b; --mut:#8fa3bb; --bg:#070a12; --panel:#101826; --line:#26344d; }
+  *{box-sizing:border-box}
+  body{font-family:system-ui,sans-serif;background:var(--bg);color:#e8f0fb;margin:0;padding:24px;max-width:760px;margin:0 auto}
+  h1{font-size:20px;margin:0 0 4px} p.sub{color:var(--mut);margin:0 0 18px;font-size:14px;line-height:1.5}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  input{flex:1;min-width:240px;font-size:16px;padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:#e8f0fb}
+  button{font-size:15px;font-weight:700;padding:11px 18px;border-radius:10px;border:0;background:#2bbfa8;color:#04110f;cursor:pointer}
+  button:disabled{opacity:.5;cursor:default}
+  #verdict{font-size:17px;font-weight:700;padding:12px 14px;border-radius:10px;margin:14px 0;display:none}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:20px 0 6px;border-bottom:1px solid var(--line);padding-bottom:5px}
+  .t{padding:10px 12px;border:1px solid var(--line);border-radius:10px;margin:7px 0;background:var(--panel)}
+  .t .hd{display:flex;gap:9px;align-items:center}
+  .tag{font-weight:800;font-size:12px;padding:2px 8px;border-radius:6px;min-width:62px;text-align:center}
+  .PASS{background:rgba(43,191,122,.16);color:var(--ok)} .FAIL{background:rgba(226,85,99,.16);color:var(--bad)}
+  .WARN{background:rgba(224,169,59,.16);color:var(--warn)} .RUN{background:rgba(143,163,187,.16);color:var(--mut)} .SKIP{background:rgba(143,163,187,.12);color:var(--mut)}
+  .t .name{font-weight:600;font-size:14px} .t .ep{color:var(--mut);font-size:12px;font-family:ui-monospace,monospace}
+  .t .detail{color:var(--mut);font-size:12.5px;margin-top:6px;font-family:ui-monospace,monospace;white-space:pre-wrap;word-break:break-word}
+  code{background:#0b1322;padding:1px 5px;border-radius:5px;font-size:12.5px}
+</style>
+</head>
+<body>
+<h1>GrowBot body — conformance test</h1>
+<p class="sub">
+  Does your board "speak GrowBot"? Enter its base URL and hit <b>Run</b>. See
+  <code>PROTOCOL.md</code> for the contract.<br>
+  <b>Tip:</b> open this file from disk (<code>file://</code>) and point it at your board's
+  LAN address (e.g. <code>http://192.168.1.50</code>) — that avoids browser mixed-content
+  blocks. A <code>https://…trycloudflare.com</code> tunnel works from anywhere.
+  <b>Watch the legs</b> while it runs — green checks prove the wire, your eyes prove the motion.
+</p>
+
+<div class="row">
+  <input id="url" placeholder="http://192.168.1.50   or   https://xxxx.trycloudflare.com" autocomplete="off">
+  <button id="go">Run</button>
+</div>
+<div id="verdict"></div>
+<div id="out"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const out = $('#out');
+const TIMEOUT = 6000;
+
+function clean(u){ return u.trim().replace(/\/+$/,''); }
+function wsURL(base){ return base.replace(/^http/,'ws') + '/ws'; }
+
+async function http(base, path, {method='GET', json=null}={}){
+  const ctl = new AbortController();
+  const to = setTimeout(()=>ctl.abort(), TIMEOUT);
+  const t0 = performance.now();
+  try{
+    const r = await fetch(base+path, {
+      method,
+      headers: json!=null ? {'content-type':'application/json'} : undefined,
+      body: json!=null ? JSON.stringify(json) : undefined,
+      signal: ctl.signal,
+    });
+    const text = await r.text();
+    return { status:r.status, text, ms: performance.now()-t0 };
+  }finally{ clearTimeout(to); }
+}
+function parse(text){ try{ return JSON.parse(text); }catch(e){ return null; } }
+
+// ---- the checks: each returns {state:'PASS'|'FAIL'|'WARN', detail} ----
+const GROUPS = [
+  { title:'Minimum viable body — all must PASS', tests:[
+    { name:'reachable + telemetry', ep:'GET /stats', run: async (b)=>{
+        const r = await http(b,'/stats');
+        const j = parse(r.text);
+        if(r.status!==200) return {state:'FAIL', detail:`status ${r.status} — ${r.text.slice(0,120)}`};
+        if(!j || !j.act || typeof j.act.active==='undefined' || typeof j.act.queued_ms==='undefined')
+          return {state:'FAIL', detail:`200 but missing act.active/act.queued_ms\n${r.text.slice(0,160)}`};
+        return {state:'PASS', detail:`200 · act=${JSON.stringify(j.act)} up_s=${j.up_s}`};
+      }},
+    { name:'gesture plays, replies instantly (legs should wiggle)', ep:'POST /act', run: async (b)=>{
+        const steps=[{l:120,r:60,ms:400},{l:60,r:120,ms:400},{l:90,r:90,ms:300}]; // 1100ms motion
+        const r = await http(b,'/act',{method:'POST',json:{steps,mode:'replace'}});
+        const j = parse(r.text);
+        if(r.status!==200 || !j || j.ok!==1) return {state:'FAIL', detail:`expected 200 {ok:1,...}, got ${r.status} ${r.text.slice(0,120)}`};
+        if(j.queued_ms!==1100) return {state:'WARN', detail:`200 ok but queued_ms=${j.queued_ms}, expected 1100 (sum of step ms). Motion still ran.`};
+        if(r.ms>=1100) return {state:'FAIL', detail:`server BLOCKED ${Math.round(r.ms)}ms for the 1100ms motion — must reply immediately and play locally`};
+        if(r.ms>=800) return {state:'WARN', detail:`reply took ${Math.round(r.ms)}ms (mostly link latency?). queued_ms=1100 ✓`};
+        return {state:'PASS', detail:`200 {ok:1,queued_ms:1100} · replied in ${Math.round(r.ms)}ms (didn't block)`};
+      }},
+    { name:'stop is instant + limp', ep:'GET /stop', run: async (b)=>{
+        const r = await http(b,'/stop');
+        if(r.status!==200) return {state:'FAIL', detail:`status ${r.status}`};
+        if(!/stop/i.test(r.text)) return {state:'WARN', detail:`200 but body was "${r.text.slice(0,60)}" (reference returns "stopped")`};
+        return {state:'PASS', detail:`200 "${r.text.trim()}" — legs should be limp now`};
+      }},
+  ]},
+  { title:'Full conformance — polish', tests:[
+    { name:'backpressure: oversized plan refused', ep:'POST /act (×6 of 3000ms)', run: async (b)=>{
+        const r = await http(b,'/act',{method:'POST',json:{steps:Array(6).fill({l:90,r:90,ms:3000})}});
+        if(r.status===409 && /queue full|full/i.test(r.text)) return {state:'PASS', detail:`409 "${r.text.slice(0,80)}"`};
+        return {state:'FAIL', detail:`expected 409 queue-full, got ${r.status} ${r.text.slice(0,100)}`};
+      }},
+    { name:'validation: garbage rejected', ep:'POST /act {steps:"soup"}', run: async (b)=>{
+        const r = await http(b,'/act',{method:'POST',json:{steps:'soup'}});
+        if(r.status===400) return {state:'PASS', detail:`400 as expected`};
+        return {state:'FAIL', detail:`expected 400, got ${r.status} ${r.text.slice(0,100)}`};
+      }},
+    { name:'canned routine', ep:'GET /routine?name=wiggle', run: async (b)=>{
+        const r = await http(b,'/routine?name=wiggle');
+        if(r.status===200 && /queued/i.test(r.text)) return {state:'PASS', detail:`200 "${r.text.trim()}"`};
+        return {state:'WARN', detail:`got ${r.status} "${r.text.slice(0,80)}" (routines are optional)`};
+      }},
+    { name:'walk transport: WebSocket /ws opens + accepts poses', ep:'WS /ws', run: (b)=> new Promise((resolve)=>{
+        let ws, done=false;
+        const finish = (state, detail)=>{ if(done) return; done=true; try{ws&&ws.close();}catch(e){} resolve({state,detail}); };
+        const t = setTimeout(()=>finish('FAIL','no open/error within 6s — is /ws implemented?'), TIMEOUT);
+        try{ ws = new WebSocket(wsURL(b)); }
+        catch(e){ clearTimeout(t); return finish('FAIL', 'could not construct WebSocket: '+e.message); }
+        ws.onopen = ()=>{
+          try{
+            ws.send('70,110');
+            setTimeout(()=>{ try{ws.send('90,90');}catch(e){} clearTimeout(t);
+              finish('PASS','connected; sent "70,110" then "90,90" — legs should have nudged then centered'); }, 450);
+          }catch(e){ clearTimeout(t); finish('FAIL','open but send failed: '+e.message); }
+        };
+        ws.onerror = ()=>{ clearTimeout(t); finish('FAIL','socket error (wss cert? /ws not served? mixed content?)'); };
+      })},
+  ]},
+];
+
+function rowEl(name, ep){
+  const el = document.createElement('div'); el.className='t';
+  el.innerHTML = `<div class="hd"><span class="tag RUN">…</span><span class="name"></span><span class="ep"></span></div><div class="detail"></div>`;
+  el.querySelector('.name').textContent = name;
+  el.querySelector('.ep').textContent = ep;
+  out.appendChild(el); return el;
+}
+function setRow(el, state, detail){
+  const tag = el.querySelector('.tag'); tag.className = 'tag '+state; tag.textContent = state;
+  el.querySelector('.detail').textContent = detail || '';
+}
+
+async function run(){
+  const base = clean($('#url').value);
+  if(!/^https?:\/\//.test(base)){ alert('enter a URL starting with http:// or https://'); return; }
+  try{ localStorage.setItem('gb_conf_url', base); }catch(e){}
+  $('#go').disabled = true; out.innerHTML=''; const v=$('#verdict'); v.style.display='none';
+  if(location.protocol==='https:' && base.startsWith('http://')){
+    const w=rowEl('mixed-content warning','—');
+    setRow(w,'WARN','this page is on https but the board is http:// — the browser will block these fetches. Open this file from disk (file://) or use the board\'s https tunnel.');
+  }
+  let minTests=0, minPass=0;
+  for(const g of GROUPS){
+    const h=document.createElement('h2'); h.textContent=g.title; out.appendChild(h);
+    const isMin = g.title.startsWith('Minimum');
+    for(const t of g.tests){
+      const el = rowEl(t.name, t.ep);
+      let res;
+      try{ res = await t.run(base); }
+      catch(e){ res = {state:'FAIL', detail:'threw / network blocked: '+(e&&e.message||e)}; }
+      setRow(el, res.state, res.detail);
+      if(isMin){ minTests++; if(res.state==='PASS') minPass++; }
+    }
+  }
+  v.style.display='block';
+  if(minPass===minTests){ v.style.background='rgba(43,191,122,.16)'; v.style.color='var(--ok)';
+    v.textContent='✅ PASS — this board speaks GrowBot (minimum viable body). Post your build!'; }
+  else{ v.style.background='rgba(226,85,99,.16)'; v.style.color='var(--bad)';
+    v.textContent=`❌ ${minPass}/${minTests} core checks passed — not a conforming body yet. Fix the FAILs above.`; }
+  $('#go').disabled = false;
+}
+
+$('#go').addEventListener('click', run);
+$('#url').addEventListener('keydown', e=>{ if(e.key==='Enter') run(); });
+try{ const s=localStorage.getItem('gb_conf_url'); if(s) $('#url').value=s; }catch(e){}
+</script>
+</body>
+</html>

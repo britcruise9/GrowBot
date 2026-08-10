@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GrowBot body template (print at 100%)</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; background:#eef1f4; color:#0b0e13;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+
+  .screen { max-width: 720px; margin: 0 auto; padding: 22px 18px 6px; }
+  .screen h1 { font-size: 21px; margin:0 0 6px; }
+  .screen p  { font-size: 15px; line-height:1.5; margin:8px 0; color:#26303d; }
+  .btn { display:inline-block; margin:8px 0 2px; padding:12px 20px; border:0; border-radius:10px;
+    background:#147a4b; color:#fff; font-size:16px; font-weight:700; cursor:pointer; }
+  .btn:hover { background:#0f6740; }
+  .fine { color:#5a6675; font-size:13px; }
+
+  .sheetwrap { display:flex; justify-content:center; padding: 10px 10px 40px; }
+  .sheet { background:#fff; box-shadow:0 2px 14px rgba(0,0,0,.12); }
+  svg.tmpl { display:block; }
+
+  /* everything is a stroke on transparent fill so it prints regardless of the
+     "Background graphics" setting, and reads the same in black and white. */
+  svg.tmpl text { fill:#000; font-family: ui-sans-serif, system-ui, Arial, sans-serif; }
+  .cut   { fill:none; stroke:#000; stroke-width:0.5; }
+  .check { fill:none; stroke:#000; stroke-width:0.6; }
+  .check-hd { font-size:5px; font-weight:800; }
+  .tiny  { font-size:3px; }
+  .note  { font-size:3.1px; }
+  .shape-hd  { font-size:5px; font-weight:800; }
+  .shape-hd2 { font-size:4.2px; font-weight:800; }
+  .shape-sub { font-size:3.2px; }
+
+  @media print {
+    @page { size: auto; margin: 8mm; }
+    html, body { background:#fff; }
+    .screen { display:none !important; }
+    .sheetwrap { padding:0; display:block; }
+    .sheet { box-shadow:none; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="screen">
+    <h1>GrowBot body template</h1>
+    <p>No 3D printer? Print this at full size and cut the base plate and the two legs out of any stiff flat material (about 4.5 mm thick).</p>
+    <button class="btn" onclick="window.print()">Print this page</button>
+    <p class="fine">Print at 100%, actual size, with Fit to Page off. Then check the square measures 50 mm before you cut. Screens are not to scale, only the printed page is.</p>
+  </div>
+
+  <div class="sheetwrap">
+    <div class="sheet">
+      <svg class="tmpl" xmlns="http://www.w3.org/2000/svg"
+           width="180mm" height="214mm" viewBox="0 0 180 214">
+<rect x="8.000" y="10.000" width="50.000" height="50.000" rx="0" class="check"/>
+<text x="33.000" y="31.500" text-anchor="middle" class="check-hd">CHECK</text>
+<text x="33.000" y="38.000" text-anchor="middle" class="check-hd">50 mm</text>
+<text x="33.000" y="43.500" text-anchor="middle" class="tiny">2 in</text>
+<text x="67.000" y="24.000" text-anchor="start" class="note">Print at 100% (actual size).</text>
+<text x="67.000" y="30.000" text-anchor="start" class="note">Each side of this square must</text>
+<text x="67.000" y="35.500" text-anchor="start" class="note">measure 50 mm (2 in).</text>
+<text x="67.000" y="43.000" text-anchor="start" class="note">If it is smaller, your printer</text>
+<text x="67.000" y="48.500" text-anchor="start" class="note">shrank the page. Reprint with</text>
+<text x="67.000" y="54.000" text-anchor="start" class="note">Fit to Page turned off.</text>
+<rect x="8.000" y="76.000" width="170.000" height="68.600" rx="2" class="cut"/>
+<text x="93.000" y="107.800" text-anchor="middle" class="shape-hd">BASE PLATE   (cut 1)</text>
+<text x="93.000" y="114.800" text-anchor="middle" class="shape-sub">170 x 68.6 mm   /   6 11/16 x 2 11/16 in</text>
+<text x="8.000" y="156.000" text-anchor="start" class="shape-hd2">LEGS   (cut two the same)</text>
+<rect x="8.000" y="160.000" width="84.000" height="21.000" rx="3" class="cut"/>
+<text x="50.000" y="171.700" text-anchor="middle" class="shape-sub">LEG   84 x 21 mm   /   3 5/16 x 13/16 in</text>
+<rect x="8.000" y="184.000" width="84.000" height="21.000" rx="3" class="cut"/>
+<text x="50.000" y="195.700" text-anchor="middle" class="shape-sub">LEG   84 x 21 mm   /   3 5/16 x 13/16 in</text>
+      </svg>
+    </div>
+  </div>
+
+</body>
+</html>

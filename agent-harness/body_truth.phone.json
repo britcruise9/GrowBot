@@ -1,0 +1,52 @@
+{
+  "format": "growbot-body-truth",
+  "version": 1,
+  "id": "phone-bare",
+  "name": "bare phone (speaker, synth, screen — no motors)",
+  "movement_guide": "You have no limbs yet. Your body is a phone: a voice that speaks, a droid-voice that beeps and warbles, a little synth that sings real notes, and a screen that can bloom light. Reach for sound and light the way a creature reaches for gesture — sometimes a single beep or one sung note says more than words. Compose freely; the examples show what is possible, not what to replay.",
+  "verbs": [
+    {
+      "v": "say",
+      "kind": "atomic",
+      "motion": false,
+      "args": {
+        "text": { "type": "string", "max_words": 18 }
+      },
+      "guide": "spoken aloud VERBATIM through the speaker — only speakable words, no asterisks, emoji, symbols, or stretched spellings (you SING a hum, never type one). Omit the verb entirely to stay silent."
+    },
+    {
+      "v": "sound",
+      "kind": "atomic",
+      "motion": false,
+      "args": {
+        "name": { "type": "enum", "values": ["chirp", "trill", "whistle", "warble", "blip", "alarm", "squeal", "droop", "fanfare", "purr"] }
+      },
+      "guide": "your droid voice — an R2D2-style utterance, sometimes alone instead of words."
+    },
+    {
+      "v": "sing",
+      "kind": "atomic",
+      "motion": false,
+      "args": {
+        "notes": { "type": "array", "max_items": 6, "items": { "hz": [80, 900], "ms": [120, 1200] } }
+      },
+      "guide": "up to 6 real notes played before any words — echo what you hear, answer it, harmonize, invent; omit when sound is not the moment.",
+      "examples": [
+        { "notes": [ { "hz": 240, "ms": 400 }, { "hz": 320, "ms": 300 } ] },
+        { "notes": [ { "hz": 180, "ms": 600 }, { "hz": 360, "ms": 250 }, { "hz": 540, "ms": 250 }, { "hz": 720, "ms": 500 } ] }
+      ]
+    },
+    {
+      "v": "burst",
+      "kind": "atomic",
+      "motion": false,
+      "args": {
+        "name": { "type": "enum", "values": ["sparkle", "joy", "pulse", "ripple", "shiver", "rain"] }
+      },
+      "guide": "a bloom of light on the screen for a big feeling — optional, rare, earned."
+    }
+  ],
+  "limits": {
+    "max_motion_verbs_per_tick": 1
+  }
+}

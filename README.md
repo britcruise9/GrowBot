@@ -1,48 +1,49 @@
-# GrowBot V0
+# GrowBot
 
-[![GrowBot V0](hero.jpg)](https://www.youtube.com/watch?v=S67z2aekBrI)
+An experimental project to build the cheapest possible state of the art AI robot platform. The idea: an AI robot that grows up differently based on its own experiences of the world.
 
-▶ **[Watch the build video](https://www.youtube.com/watch?v=S67z2aekBrI)**
+The brain is any smartphone. The body is a Pico, two servos, and a battery. About $30, 30 minutes, no soldering. It senses through the phone, stores its experiences in a soul file, and dreams to self improve.
 
-This project started when I imagined making a little robot that would learn everything, how to move and do things. A pure machine learning approach, using basic evolutionary algorithms and then a neural network. It then evolved to ask, "what if you gave a modern AI foundation model a nervous and motor system?" GrowBot collides these questions into a "general learning robot", which can be anything... and learns to move, see, and react from scratch.
+[Launch video](https://www.youtube.com/watch?v=mIfmUHiMN3U) · [Wake one up](https://growbot.dev/start)
 
-Most importantly, getting physical AI in your hands: fast, easy, and cheap. So this project is the "simplest viable product": if you take a modern humanoid and delete everything down to the bare minimum, how cheap can you make it?
+## Why open
 
-> [!WARNING]
-> This is a V0 snapshot for research purposes, and it is still hacky (the servos and the Pi share a power rail, protected by a capacitor) because it is a work in progress. It is a reference for the build in the video, not a step by step guide for beginners, so expect to fill in some gaps. V1 is coming Fall 2026 as a more stable, tested platform with step by step build, testing, and training instructions, a custom PCBA, a calibrated digital twin, and a top secret thing I can't even show yet.
+Top down home robots are the scary version: corporate machines nobody outside can inspect. Bottom up is safer: millions of small robots you fully control. Open it, read it, retrain it, use any model you want.
 
-![GrowBot wiring diagram](wiring.png)
+## In this repo
 
-## What's in here
-- **[BOM.md](BOM.md)** is the full parts list with specs, rough prices, where I got things, the GPIO pin map, and the setup notes that gave me trouble.
-- **[wiring.svg](wiring.svg)** is the full wiring diagram. The image above is the same thing.
-- **[mechanical/stl_snapshot](mechanical/stl_snapshot)** is the current V0 body STL snapshot: holey top shell, matching base, and short rounded legs.
-- **[simulation](simulation)** has a standalone MuJoCo body XML snapshot. The training setup is not included.
-
-## The build at a glance
-| Part of the robot | What I used |
+| | |
 |---|---|
-| Brain | Raspberry Pi Zero 2 W (quad core, WiFi) and a microSD card |
-| Legs | 2x Feetech SCS0009 serial bus servos (they report position and load) |
-| Senses | OV5647 camera, MPU-6050 IMU, INMP441 mic |
-| Voice and lights | MAX98357A amp into a small speaker, WS2812B LED ring |
-| Power | one 1S LiPo into an MT3608 boost to 5 V, with a capacitor on the 5 V rail |
+| **[BUILD.md](BUILD.md)** | The build: 2 servos + Pico + phone |
+| **[BOM.md](BOM.md)** | Parts list with sourcing links |
+| **[hardware/](hardware/)** | Body STLs, plus a paper cutout template if you have no printer |
+| **[firmware/](firmware/)** | Pico firmware, drag and drop |
+| **[protocol/](protocol/)** | The open body protocol + conformance test |
+| **[agent-harness/](agent-harness/)** | Run your own LLM on your robot, no account |
+| **[PORTING.md](PORTING.md)** | Plug the GrowBot brain into your own robot |
+| **[policy/](policy/)** | The trained walk policy: runner, weights, contract |
+| **[ports/](ports/)** | Community ports. First up: a robot lawnmower |
 
-Everything runs on the Pi. There is no external computer.
+Build guide with pictures: [growbot.dev/build](https://growbot.dev/build)
 
-## Software
+## Two ways in
 
-Test policies are coming next, rolled out gradually as I verify each one on the robot.
+- **Free.** Build the body, run [agent-harness/](agent-harness/) on your own key or a local model.
+- **Adopt him, $20.** The hosted brain at [growbot.dev/start](https://growbot.dev/start). No keys, no setup.
 
-The complete software is still in development. To get the hardware up and running, start with the basic setup and calibration software in **[`setup/`](setup/)**. Here is the big picture of what the hardware is built to support.
+The hosted creature costs me real money to run. That is what the $20 covers.
 
-### LLM Integration (V0)
-An onboard agent loop is the brain. It gathers the live sensor picture (camera, IMU, mic, servo feedback) and sends it to an LLM through an API. The model picks a goal and proposes an action, the robot tries it, and the result feeds back in. The WIP experimental runtime explores letting the LLM call the learned motor policies and sketch its own motions, with fast reflexes underneath as a safety floor.
+## Ports
 
-### Learned Locomotion Policies
-The low level motion comes from small motor policies that output bounded servo targets, not a hand written gait. I train them offline from short rollouts, then deploy compact versions onto the Pi. The robot logs its episodes, failures, and sensor traces so each run feeds the next training pass.
+The protocol is open on purpose: any board that speaks it is a GrowBot body. Port it, prove it with the conformance test, open a PR. Small PRs please: [CONTRIBUTING.md](CONTRIBUTING.md).
 
-The training code, agent harness, reward functions, and trained policies are still under active development.
+## Background
+
+V0 learned to walk from scratch on a Pi, wired sensor by sensor over a year. Preserved at the [v0 tag](https://github.com/britcruise9/GrowBot/releases/tag/v0). V1 moves the brain to the phone: more powerful, way cheaper.
 
 ## License
-[CC BY-NC 4.0](LICENSE): build it, modify it, and share it for non-commercial use, with credit to Art of the Problem.
+
+- **Code**: [PolyForm Noncommercial 1.0.0](LICENSE). Use, change, share, noncommercial. Commercial: info@growbot.dev
+- **Hardware and docs**: [CC BY-NC 4.0](hardware/LICENSE.md), credit Art of the Problem.
+
+Made by [Art of the Problem](https://www.youtube.com/@ArtOfTheProblem).

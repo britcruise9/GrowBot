@@ -1,9 +1,0 @@
-pyserial>=3.5     # SCS0009 servo bus
-rpi_ws281x>=4.3   # WS2812 LED ring (needs root at runtime)
-smbus2>=0.4       # IMU (MPU-6050) over I2C
-
-# Camera and audio use packages/CLIs that ship with Raspberry Pi OS and are not
-# pip-installable here:
-#   picamera2       - camera capture (or the rpicam-still CLI)
-#   espeak-ng/flite - text-to-speech    (sudo apt install espeak-ng)
-#   alsa-utils      - aplay / arecord    (speaker + mic)

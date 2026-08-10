@@ -1,4 +1,31 @@
+# Secrets - never commit these
+.env
+.env.*
+*.key
+*.pem
+secrets/
+config.js
+
+# Python
 __pycache__/
 *.pyc
+*.egg-info/
 .venv/
+venv/
+dist/
+build/
+
+# Node / web
+node_modules/
+npm-debug.log*
+.vercel/
+
+# MicroPython / hardware
+*.mpy
+
+# OS and editor junk
 .DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
