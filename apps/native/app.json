@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "GrowBot",
+    "slug": "growbot-native",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/growbot-icon.png",
+    "scheme": "growbot",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "icon": "./assets/growbot-icon.png",
+      "bundleIdentifier": "org.growbot.mobile",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "org.growbot.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#121411",
+        "foregroundImage": "./assets/growbot-foreground.png",
+        "monochromeImage": "./assets/growbot-foreground.png"
+      },
+      "predictiveBackGestureEnabled": true
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": true,
+          "faceIDPermission": "Allow GrowBot to protect your OpenRouter key."
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#121411",
+          "image": "./assets/growbot-foreground.png",
+          "imageWidth": 180,
+          "dark": {
+            "backgroundColor": "#121411",
+            "image": "./assets/growbot-foreground.png"
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}

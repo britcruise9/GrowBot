@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["GrowbotVoiceModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.growbotvoice.GrowbotVoiceModule"]
+  }
+}

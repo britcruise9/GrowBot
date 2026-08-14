@@ -1,0 +1,20 @@
+{
+  "name": "growbot-workspace",
+  "private": true,
+  "packageManager": "pnpm@11.12.0",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b && pnpm --filter native exec tsc --noEmit",
+    "lint": "pnpm --filter native lint",
+    "verify": "pnpm test && pnpm typecheck && pnpm lint",
+    "native:export": "pnpm --filter native exec expo export --platform ios --output-dir dist/ios && pnpm --filter native exec expo export --platform android --output-dir dist/android"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "eslint": "^9.39.1",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.48.1",
+    "vitest": "^4.1.10"
+  }
+}

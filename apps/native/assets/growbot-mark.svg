@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">GrowBot breathing core</title>
+  <desc id="desc">An amber creature core nested inside two moss orbital rings on charcoal.</desc>
+  <rect width="1024" height="1024" rx="224" fill="#121411"/>
+  <circle cx="512" cy="512" r="304" fill="none" stroke="#89977A" stroke-width="20" opacity=".48"/>
+  <circle cx="512" cy="512" r="228" fill="none" stroke="#89977A" stroke-width="10" opacity=".86"/>
+  <circle cx="512" cy="512" r="142" fill="#E0A83E"/>
+  <circle cx="512" cy="512" r="54" fill="#121411"/>
+  <circle cx="512" cy="196" r="22" fill="#E0A83E"/>
+  <circle cx="238" cy="670" r="16" fill="#89977A"/>
+  <circle cx="786" cy="670" r="16" fill="#89977A"/>
+</svg>

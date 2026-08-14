@@ -23,6 +23,8 @@ Top down home robots are the scary version: corporate machines nobody outside ca
 | **[PORTING.md](PORTING.md)** | Plug the GrowBot brain into your own robot |
 | **[policy/](policy/)** | The trained walk policy: runner, weights, contract |
 | **[ports/](ports/)** | Community ports. First up: a robot lawnmower |
+| **[apps/native/](apps/native/)** | Native iOS/Android creature MVP: Habitat, Story, Workshop |
+| **[packages/creature-core/](packages/creature-core/)** | Pure creature state machine and effect contract |
 
 Build guide with pictures: [growbot.dev/build](https://growbot.dev/build)
 

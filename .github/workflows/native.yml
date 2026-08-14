@@ -1,0 +1,74 @@
+name: Native MVP
+
+on:
+  pull_request:
+  push:
+    branches:
+      - codex/native-mvp-1
+
+concurrency:
+  group: native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shared:
+    name: Shared contracts and bundles
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.12.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm verify
+      - run: pnpm native:export
+
+  android:
+    name: Android native compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.12.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter native exec expo prebuild --clean --no-install --platform android
+      - name: Compile module and app
+        working-directory: apps/native/android
+        run: ./gradlew :growbot-voice:compileDebugKotlin assembleDebug --no-daemon --max-workers=2
+
+  ios:
+    name: iOS native compile
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.12.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter native exec expo prebuild --clean --no-install --platform ios
+      - run: pod install
+        working-directory: apps/native/ios
+      - name: Compile simulator app
+        working-directory: apps/native/ios
+        run: >-
+          xcodebuild -workspace GrowBot.xcworkspace -scheme GrowBot
+          -sdk iphonesimulator -destination 'generic/platform=iOS Simulator'
+          CODE_SIGNING_ALLOWED=NO build
