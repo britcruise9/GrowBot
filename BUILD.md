@@ -41,6 +41,30 @@ Both reds go to battery **+**. Then tie ALL the grounds together: battery **−*
 
 **Legs sweep = done.** Send a clip!
 
+**Legs turn but never stop?** You almost certainly have 360° continuous-rotation servos instead of
+standard 180° ones. They sell under nearly identical names. A standard servo swings to a position and
+holds it; a continuous one reads the same signal as a speed and can never hold still. Check the
+listing before you blame your wiring.
+
+## Which leg is which, and which way is forward
+
+Worth reading even if you are building your own body, because the app assumes all of this.
+
+- **Forward is the way the screen faces.** Left and right are from the creature's point of view, not
+  yours, so when you are looking at the screen its left leg is on your right.
+- **The two legs are mirror images of each other**, because the servos sit at opposite ends with
+  their shafts pointing outward. The consequence catches everybody: **the same number sent to both
+  legs swings them in opposite directions.** That is a scissor or a twist, not a move together.
+- **To move both legs the same way, the two numbers must add up to 180.** `{l:90, r:90}` is neutral
+  and upright. `{l:50, r:130}` sweeps both legs down and levers the body up to stand tall.
+  `{l:130, r:50}` sweeps both up and folds it forward. Those two are bench-calibrated.
+- **Use that to settle left and right without measuring anything.** Send `{l:50, r:130}`. If the body
+  pushes **up**, your left and right are correct. If it folds forward instead, swap them.
+
+Building a custom body? On the standard build the mirroring comes from how the servos are physically
+mounted. If yours are mounted the same way round, or you are using serial servos that take direction
+in software, invert one of them in your firmware so the rule above still holds.
+
 ## 4. Give it a brain
 
 - **Hosted brain**: go to [growbot.dev/start](https://growbot.dev/start) on the mounted phone.

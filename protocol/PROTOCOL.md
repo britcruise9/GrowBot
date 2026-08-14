@@ -114,17 +114,28 @@ reference firmware:
    never block the socket for the duration of the motion.
 2. **Positional servos, 90 = neutral.** `l`/`r` are angles, not speeds. Expressive band
    `50–130`; full `0–180` allowed but wide/fast extremes can tip a small body.
-3. **Servos on the battery rail, common ground.** Power servos from the battery, **not**
+   ⚠️ This rules out **360° / continuous-rotation servos**, which read the same value as a speed and
+   can never hold a pose. Symptom: legs move on power-up and never stop.
+3. **Orientation and the mirror rule.** Forward is the way the phone screen faces. `l`/`r` are the
+   creature's own left and right, so facing the screen its left leg is on your right. On the
+   reference body the two servos sit at opposite ends with shafts pointing outward, which makes them
+   **mirror images: the same angle sent to both swings them in opposite directions.** To move both
+   legs the same way, `l + r` must equal **180**. `{l:90,r:90}` is neutral, `{l:50,r:130}` sweeps
+   both down and levers the body upright, `{l:130,r:50}` sweeps both up and folds it forward (both
+   bench-calibrated). A custom body must honor this rule even if its servos are mounted or driven
+   differently, by inverting one side in firmware. Quick self-check with no measuring: send
+   `{l:50,r:130}` and confirm the body rises rather than folds.
+4. **Servos on the battery rail, common ground.** Power servos from the battery, **not**
    from a logic/3V3 pin. Tie the servo ground to the board ground. (SG90/MG90 run fine on a
    raw ~4 V 1S LiPo — no 5 V boost required.)
-4. **Dead-man on streamed/instant control.** `/set`, `/pose`, and `/ws` motion must
+5. **Dead-man on streamed/instant control.** `/set`, `/pose`, and `/ws` motion must
    auto-limp after **500 ms** of silence. `/act` motion ends by holding the last pose
    ~300 ms, then releasing.
-5. **Release means limp.** "Stop"/idle = cut the servo signal so the servo is limp (cool,
+6. **Release means limp.** "Stop"/idle = cut the servo signal so the servo is limp (cool,
    quiet, low current) — not actively holding torque.
-6. **Manual control wins.** A `/set`/`/pose`/`/ws` command clears any queued `/act` plan.
-7. **`/stop` is instant + hard.** Clear the queue and go limp immediately, even mid-glide.
-8. **Don't run away on disconnect.** Lost link / drained queue / closed WebSocket = limp,
+7. **Manual control wins.** A `/set`/`/pose`/`/ws` command clears any queued `/act` plan.
+8. **`/stop` is instant + hard.** Clear the queue and go limp immediately, even mid-glide.
+9. **Don't run away on disconnect.** Lost link / drained queue / closed WebSocket = limp,
    not "keep doing the last thing." Add your own stall/thermal bound — the phone's 20 s/60 s
    duty budget is advisory and **not** enforced on the chip.
 
