@@ -1,5 +1,14 @@
 # GrowBot agent harness — builder kit
 
+> **Just want the creature in the app to use YOUR model (ollama, LM Studio, vLLM)?**
+> You do not need this repo at all. That is a setting inside the app — his 🔧 BYOK pane →
+> 🖥 DIY: YOUR OWN SERVER — and the full guide including the two gotchas that catch everyone is at
+> [growbot.dev/local-brain.html](https://growbot.dev/local-brain.html). The pico is only the body;
+> it never talks to your LLM, and neither does this harness change that.
+> **This repo is for the other thing:** running a creature from a terminal with no browser and no
+> phone, with your own code in the loop. It boots a fresh creature from seed — it cannot load one
+> you have grown in the app.
+
 The mind-side of [GrowBot](https://growbot.dev) — a phone-as-brain digital creature with a hardware path — packaged so you can run it, read it, and port it to your own rig. This is the field-hardened harness design distilled to its smallest honest form: the specs are the product of a live system with real users, and every "do this, not that" in them was paid for.
 
 **Who this is for:** builders who want an LLM-driven creature/agent with durable identity, real memory discipline, and a clean body abstraction — on a phone, a robot, or anything with actuators.
