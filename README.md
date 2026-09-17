@@ -39,7 +39,7 @@ The protocol is open on purpose: any board that speaks it is a GrowBot body. Por
 
 ## Background
 
-V0 learned to walk from scratch on a Pi, wired sensor by sensor over a year. Preserved at the [v0 tag](https://github.com/britcruise9/GrowBot/releases/tag/v0). V1 moves the brain to the phone: more powerful, way cheaper.
+V0 learned to walk from scratch on a Pi, wired sensor by sensor over a year. Preserved at the [v0 tag](https://github.com/britcruise9/GrowBot/releases/tag/v0), and its walk policy plus the simulation it was trained in are in [policy/v0](policy/v0/). V1 moves the brain to the phone: more powerful, way cheaper.
 
 ## License
 
