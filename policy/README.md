@@ -20,6 +20,4 @@ Note the IMU is the PHONE'S, not the chip's: the brain runs this at ~30 Hz again
 
 Wheels instead of legs? Mirroring left/right makes wheeled bases twitch instead of drive (the gait alternates on purpose). See [ports/automower](../ports/automower/) for the wheeled-base notes.
 
-Building the older V0 body? Its walk policy and the MuJoCo setup it was trained in are in [v0/](v0/). Different body, different observation vector, not interchangeable with this one.
-
 License: PolyForm Noncommercial 1.0.0, same as the rest of the code, weights included.
