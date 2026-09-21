@@ -72,4 +72,4 @@ in software, invert one of them in your firmware so the rule above still holds.
 
 ---
 
-*Want to port GrowBot to another board (ESP32, Pi, anything)? See [`protocol/PROTOCOL.md`](protocol/PROTOCOL.md) and prove your port with `protocol/conformance.html`. Ports are the PRs I most want to see.*
+*Want to port GrowBot to another board (ESP32, Pi, anything)? Start with [`PORTING.md`](PORTING.md) and the full wire contract at [growbot.dev/body-docs.html](https://growbot.dev/body-docs.html). Your board dials out to a relay and pairs with a code, so there is no tunnel and no LAN address. `protocol/PROTOCOL.md` and `conformance.html` describe the older LAN path, which the app no longer speaks. Ports are the PRs I most want to see.*
