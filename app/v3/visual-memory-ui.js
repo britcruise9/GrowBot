@@ -335,7 +335,7 @@ function vmLateLost(o,c,released){
   else{o.say="";delete o.log;delete o.glow;c.replyWithheld=true;vmPublishResult(lost,c);}
 }
 /* 1006 LATE ACTION (Brit's bench, "this is Buggy" twice: no save, and the creature promised anyway; Codex reproduced it
-   on the live file). A COMPLETE reply whose say came before its action took the ordinary
+   on the live file, internal notes). A COMPLETE reply whose say came before its action took the ordinary
    lane at its first key, and this guard then deleted the action whenever say was nonempty, published nothing and kept the
    promise. Round 4 (1006) narrows what runs behind words to vmBehindWords: a thing's save their words did not refuse, and
    a forget their words asked for and did not ask to keep. Round 6: the bar there (never worse than origin/main given the
@@ -494,7 +494,7 @@ function vmReplyStatus(raw,c,complete,meta){
   if(!c||typeof logEv!=="function")return;
   var f=typeof window!=="undefined"&&window._lastFinish,reason=meta?meta.finish:(f&&Date.now()-f.t<10000?f.r:"");
   var transport=meta&&/^(complete|malformed|aborted|read_error|buffered|buffered_fallback|visual_repair)$/.test(meta.transport)?meta.transport:"unknown";
-  if(!/^(stop|length|content_filter|tool_calls|function_call|error)$/.test(reason))reason="unknown";   /* 0924 (Brit session [session id removed]): "error" passes. A stream the provider kills mid-reply ends on finish_reason "error", and folding that into "unknown" made it read the same as a cut line. */
+  if(!/^(stop|length|content_filter|tool_calls|function_call|error)$/.test(reason))reason="unknown";   /* 0924 (Brit session nx-mu5ra): "error" passes. A stream the provider kills mid-reply ends on finish_reason "error", and folding that into "unknown" made it read the same as a cut line. */
   var parsed=false;try{var o=JSON.parse(String(raw));parsed=!!o&&typeof o==="object"&&!Array.isArray(o);}catch(e){}
   var row={complete:!!complete,parsed:parsed,finish:reason,transport:transport,chars:String(raw||"").length,visual:(c.speechGate==="visual"||vmRawHasAction(raw))?1:0};
   if(meta&&(meta.requestedMaxTokens===512||meta.requestedMaxTokens===1024))row.requestedMaxTokens=meta.requestedMaxTokens;
@@ -504,11 +504,11 @@ function vmReplyStatus(raw,c,complete,meta){
   row.totalMs=Math.max(0,Math.min(3600000,Date.now()-c.t));
   ["headersMs","firstTextMs","firstChunkMs","serverGateMs","serverPrepMs","upstreamHeadersMs","upstreamFirstByteMs"].forEach(function(k){if(meta&&typeof meta[k]==="number"&&isFinite(meta[k])&&meta[k]>=0)row[k]=Math.min(3600000,meta[k]);});
   if(typeof c.gateMs==="number"&&isFinite(c.gateMs))row.gateMs=Math.max(0,Math.min(3600000,c.gateMs));
-  /* 0924 (Brit session [session id removed]): prov = the provider that served the stream, cut to letters, digits, space, dot, underscore and hyphen, 40 at most, so the journal gets a name and never markup, a key or a message. pe = 1 when the stream carried an error frame, 0 otherwise: a malformed row with pe:1 is the provider giving up, with pe:0 a line cut short. Together they say who stalls and how a broken reply broke. */
+  /* 0924 (Brit session nx-mu5ra): prov = the provider that served the stream, cut to letters, digits, space, dot, underscore and hyphen, 40 at most, so the journal gets a name and never markup, a key or a message. pe = 1 when the stream carried an error frame, 0 otherwise: a malformed row with pe:1 is the provider giving up, with pe:0 a line cut short. Together they say who stalls and how a broken reply broke. */
   if(meta&&typeof meta.prov==="string"){var prov=meta.prov.slice(0,40).replace(/[^A-Za-z0-9 ._-]/g,"");if(prov)row.prov=prov;}
   row.pe=meta&&meta.providerError?1:0;
   row.arm=meta&&(meta.arm==="A"||meta.arm==="B")?meta.arm:"";   /* 0925: the provider arm the house proxy pinned the stream to (x-gb-arm), next to prov = who actually served it. "" = not pinned (buffered-only turn, local brain, BYO key, non-Gemini slug, PROV_AB_STREAM off, or a server without the stamp). Always present, so an old client (no field) never reads as an unpinned one. */
-  /* 0924 (Brit session [session id removed]) E5: act = the visual action the reply carried: none, one of the fixed action names, or
+  /* 0924 (Brit session nx-mu5ra) E5: act = the visual action the reply carried: none, one of the fixed action names, or
      invalid when an action is declared but has no readable name. sayT = its top-level say: str, none (absent) or other,
      only on a parsed reply. Fixed words, never content. visual:1 with sayT:none was the silent "remember the kittens"
      drop, and act names which action a reply like that carried. Telemetry must never throw into the turn. */

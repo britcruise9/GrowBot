@@ -152,7 +152,7 @@ export var SELF_MOVE_SETTLE_MS = 350;   // how long one felt movement owns the b
  * which is credits/sleep. Thresholds put the resting creature on the quietest level, so "normal
  * is the usual" still holds; only a genuinely lively mood steps up. An explicit agent or person
  * choice always wins over this, because only the 'auto' actor is ever re-synced from mood. */
-/* 0923 (Brit, [session id removed]): the quietest preset was "so subtle i barely saw it", and with a
+/* 0923 (Brit, a session): the quietest preset was "so subtle i barely saw it", and with a
  * 0.5 cutoff an ordinary curious creature (target 0.55, drifting) sat on the boundary and fell into
  * it. Everyday energy (curious 0.55, happy 0.7) now gets the clearly visible middle preset; only a
  * genuinely calm or sleepy creature (calm targets 0.3) settles to the quietest, and alert/scared
@@ -311,7 +311,7 @@ FaceTrack.prototype.report = function () {
     bodyReady: !!s.online,
     available: !!(s.camera && s.online && !s.blocked && s.profile && s.profile.supported),
     /* COMPUTED FROM THE HOST'S STATE, not only from a flag tick() sets (60s of nothing in
-       [session id removed]). 0929: needsCentre is gone with the centring glide; the body stands itself. */
+       a session). 0929: needsCentre is gone with the centring glide; the body stands itself. */
     poseUnknown: !poseKnown(s.pose),
     stanceTooFar: poseKnown(s.pose) && (heightError(s.pose) > this.recoverMaxErrorDeg ||
                                         leanError(s.pose) > RECOVER_MAX_LEAN_DEG),
@@ -431,7 +431,7 @@ FaceTrack.prototype.yieldTo = function (why) {
   if (owned) this.metrics.yields++;
   this.say('Yielded to ' + reason + ' · will resume');
   /* LOG THE TRANSITION, NOT THE TICK. This tee is crossed at frame rate while a policy walk runs,
-     and a row per call buried the journal: 199 of the 240 kept rows in [session id removed] were this
+     and a row per call buried the journal: 199 of the 240 kept rows in a session were this
      single event, leaving 41 for everything else. Carry the suppressed count so the churn is still
      visible, exactly as the relay lane does. */
   this._yieldN = (this._yieldN || 0) + 1;
@@ -692,7 +692,7 @@ FaceTrack.prototype.tick = function (now) {
     }
   } else if (this.recoverFrom !== null) {
     /* Change-only, like the yield tee: the legs can cross the envelope edge repeatedly while
-       following (18 rows in 3.5s in [session id removed]), and a row per crossing buries the journal
+       following (18 rows in 3.5s in a session), and a row per crossing buries the journal
        the same way the yield spam did. Log the first, then one per 10s with the count. */
     var ms = Math.round(now - this.recoverFrom);
     this._recovN = (this._recovN || 0) + 1;

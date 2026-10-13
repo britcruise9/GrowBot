@@ -2,7 +2,7 @@
 //
 // WHY THIS EXISTS: growbot_policy.js's GrowBotWalker has ONE hardcoded obs layout (classic obs16:
 // euler+gyro+hist). This module assembles the obs by reading the channel NAMES from obs_spec, so a
-// policy that declares a different channel set runs (e.g. mels-trained obs72 = 8 channels
+// policy that declares a different channel set runs (e.g. contributor-trained obs72 = 8 channels
 // accel+gyro+prevAction, no command; Harsh's DR/RMA obs80 with euler channels).
 //
 // WHO RUNS IT (0929): v3/next.html (loadGait: the agent's walks and spins), tester/policy.html and
@@ -23,10 +23,10 @@ import { GrowBotPolicy } from './growbot_policy.js';
 
 // ── IMU frame transform (the 0623 gravity-axis fix) ──
 // policy.html rotates the phone so gravity → +z (z-up). A policy trained in a frame where
-// gravity sits on a DIFFERENT axis (e.g. mel's obs72: accel-mean gravity on +y) then gets an
+// gravity sits on a DIFFERENT axis (e.g. a contributor's obs72: accel-mean gravity on +y) then gets an
 // out-of-distribution obs and freezes (frozen split stance). We detect the policy's expected
 // "up" from its accel-channel means and rotate the z-up accel/gyro onto it. z-up policies
-// (official, mels.a) → identity → math unchanged.
+// (official, a contributor) → identity → math unchanged.
 function mat3mul(A, B) {
   const C = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
   for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) { let s = 0; for (let k = 0; k < 3; k++) s += A[i][k] * B[k][j]; C[i][j] = s; }
@@ -52,12 +52,12 @@ const norm3 = (a) => { const n = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0]
 // Explicit gravity-up declaration: obs_spec.imu_frame.up / .gravity (or obs_spec.gravity_axis),
 // as an axis token ('+z','-x',…) or a 3-vector. The accelerometer reads +g along this axis at
 // rest. Authoritative over the accel-mean guess. Freeform imu_frame.convention/.note are NOT
-// parsed (human docs; can be inconsistent — see mel's obs72). null = nothing usable declared.
+// parsed (human docs; can be inconsistent — see a contributor's obs72). null = nothing usable declared.
 function parseDeclaredUp(spec) {
   const f = spec.imu_frame || {};
   // (no ?? in this file: nullish coalescing is iOS 13.4+ SYNTAX, and tester/policy.html imports
   //  this statically — one ?? anywhere here parse-kills that whole tab on older iPhones. Found via
-  //  Kenod44's iPhone 6 "Tap to Wake shows pressed, does nothing" report, 0810.)
+  //  a tester's iPhone 6 "Tap to Wake shows pressed, does nothing" report, 0810.)
   const g = (f.up != null) ? f.up : ((f.gravity != null) ? f.gravity : spec.gravity_axis);
   if (g == null) return null;
   if (Array.isArray(g) && g.length === 3 && g.every((v) => typeof v === 'number' && Number.isFinite(v))) {
@@ -125,7 +125,7 @@ function normalizeSpec(pj) {
   // action -> radians: obs_spec wins, then top-level, then the sim ctrlrange ±1.5708 (=±90°).
   const action_to_rad = (sp.action_to_rad != null) ? sp.action_to_rad : ((pj.action_to_rad != null) ? pj.action_to_rad : 1.5707963267948966);
   // action_map: default convention is a0=right, a1=left (both frozen walkers). A policy may
-  // declare the opposite ({"0":"left_leg","1":"right_leg"} — mels 0703 calibrated exports) and
+  // declare the opposite ({"0":"left_leg","1":"right_leg"} — contributor 0703 calibrated exports) and
   // the walker HONORS it by swapping at the servo stage. Only a malformed/one-sided map throws.
   const am = sp.action_map;
   let swapDeclared = false;
@@ -182,7 +182,7 @@ export class Walker {
     return null;
   }
   setFrame(name) {
-    if (name === 'auto') {   // explicit auto = trust the DATA: a wrong declared up (mels 0702 stand-up) must not neuter the override
+    if (name === 'auto') {   // explicit auto = trust the DATA: a wrong declared up (contributor 0702 stand-up) must not neuter the override
       const u = this._meanUp || this.up;
       if (u) { this.up = u; this.upSource = 'mean'; }
       this.frame = 'auto'; this.R = u ? rotZto(u) : null;
@@ -247,7 +247,7 @@ export class Walker {
   // cycle:<name> clock value = scale · fn(2π·frequency·(stepIndex/control_hz) + phase offset).
   // Deterministic STEP-count clock (not wall-clock); uses the policy's immutable control_hz, not the
   // cadence slider. The value is frozen into the frame at build time, so history frames carry past phase.
-  // Phase offset: phase_offset_rad, else offset_seconds·2π·f (mels obs90 exports declare offset_seconds;
+  // Phase offset: phase_offset_rad, else offset_seconds·2π·f (contributor obs90 exports declare offset_seconds;
   // dropping it collapses a staggered clock PAIR into identical twins and erases the gait's direction — 0709 bug).
   _cycle(name) {
     const c = this.cycles[name] || {};
@@ -266,7 +266,7 @@ export class Walker {
     cmd = cmd || { fwd: 0, yaw: 0 };
     let E = euler || { roll: 0, pitch: 0, yaw: 0 };
     if (this.mirror) E = { roll: -E.roll, pitch: E.pitch, yaw: -E.yaw };   // sagittal mirror: roll/yaw flip, pitch stays (matches the gyro pseudovector)
-    // z-up (default): no rotation, apply the bench IMU_SIGN (preserves the proven mels.a path).
+    // z-up (default): no rotation, apply the bench IMU_SIGN (preserves the proven contributor path).
     // Frame transform active ('auto'/'g2*'): rotate accel/gyro into the
     // policy's frame and DON'T apply IMU_SIGN (the rotation places the axes; signs are baked into
     // the policy's own training/mean).
@@ -294,7 +294,7 @@ export class Walker {
       if (ring.length > seg.frames) ring.pop();
       for (const f of ring) for (const v of f) obs.push(v);   // flatten newest-first, frame-major
     }
-    this.lastObs = obs;                             // read outside this repo: an internal spin audit (0904) and spin-live-bench's stepLog
+    this.lastObs = obs;                             // read outside this repo by internal parity and bench tools
     const a = runForward(this.p, obs);              // [aRight, aLeft] in [-1,1] — honors swish/relu/tanh/linear
     this.last = a;                                  // feed the actually-sent action back
     const c = this.cal, rev = this.reverse ? -1 : 1, deg = (v) => v * rev * this.toRad * 180 / Math.PI;   // rev negates both legs' swing = reverse travel

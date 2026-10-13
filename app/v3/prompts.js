@@ -234,7 +234,7 @@ function buildOutputSchema(body) {
   var band = hasBody && body.servos && body.servos[0] ? body.servos[0].band : [50, 130];
   // 0815 WHEELS: the body block itself declares a wheeled/no-walk body (walk.present:false or a
   // wheel id) — the contract must tell the wheeled truth or the model narrates legs it doesn't have
-  // (body-truth law: prompt and verb always match; Sprout's traces are what the mismatch produces).
+  // (body-truth law: prompt and verb always match; one tester's traces are what the mismatch produces).
   var wheels = hasBody && !!((body.walk && body.walk.present === false) || /wheel/i.test(String(body.id || "") + " " + String((body.geometry && body.geometry.drive) || "")));   // 0815 review: MUST match next.html's _wheelsEval doors (id + geometry.drive) — a body the app drives as wheels while this contract says legs is the split-brain the body-truth law forbids
   var faceTrack = hasBody && !wheels && faceTrackOffered();   // wheels have no legs to follow with
   var s =

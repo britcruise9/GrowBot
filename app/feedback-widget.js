@@ -12,7 +12,7 @@
   function sid(){
     try { return localStorage.getItem("pb_did") || localStorage.getItem("pb2_sid") || localStorage.getItem("gb_next_sid") || ""; } catch(e){ return ""; }
   }
-  /* 0925 (field note from device <device> could not be matched to its log): sid above is the DEVICE,
+  /* 0925 (field note from a device could not be matched to its log): sid above is the DEVICE,
      journals are keyed by SESSION. logSid is the journal/watch session id when the page has one (v3 LOG_SID,
      "nx-..."), read from the page, never guessed from storage: a page without a journal sends "".
      0925 review (FB-OPTOUT): the session id is the key to that journal, so it follows the page's own sharing switch,

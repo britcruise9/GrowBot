@@ -464,7 +464,7 @@ async function openGallery(){
   community.sort((a,b)=>(+b.created||+b.t||0)-(+a.created||+a.t||0));
   // CURATED WHITELIST 0728 (Brit bench): show ONLY the walks worth running right now. DR-RMA is the
   // one good walk → top. Current Walk kept at the BOTTOM to re-test after calibration. Everything
-  // else (mels ×2, Harsh steerable, FWD/official) is HIDDEN for now — they lean/don't work.
+  // else (contributor ×2, Harsh steerable, FWD/official) is HIDDEN for now — they lean/don't work.
   var _ORDER={ '993924de':0, 'f7104439':1, '46181387':2, 'c7cbc4ae':3, '494029d2':4 };   // spin v4 RESTORED 0911 by request. Status unconfirmed on hardware since hiding (0826) — gyro-axis fix (GYRO-FIX toggle, minimal.html) was found+bench-verified motors-off but never confirmed with a real running spin. Hide again fast if reports repeat.   // OLIE final 154M (top — widest zero-tolerance: walks through -35..+25deg pitch error), DR-RMA (the proven one), narrowBatt v2 (freezes past -20deg pitch error), old walk (bottom). Buggy 'Current Walk' deleted 0728 — action_to_rad was pi/2 (57% overswing) + no control_hz.
   community = community.filter(function(e){ return _ORDER[e.id]!=null; })
                        .sort(function(a,b){ return _ORDER[a.id]-_ORDER[b.id]; });
@@ -586,7 +586,7 @@ $('walkn').onclick=()=>{
     return;
   }
   pullCal();   // apply the latest Manual-tab signs/trim to this walk
-  // AUTO-STANCE (0808 — murf0252's bench discovery, automated): REST ~1.2s so the legs center and the
+  // AUTO-STANCE (0808 — a tester's bench discovery, automated): REST ~1.2s so the legs center and the
   // body settles into its canonical stance, RE-ZERO there, THEN walk. The policies measure tilt
   // relative to the zero, and training assumes zero = the legs-neutral stance; re-zeroing with the
   // legs wherever the last walk left them bakes in a 10-20° pitch offset that eats the policy's

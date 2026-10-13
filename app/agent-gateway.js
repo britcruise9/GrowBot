@@ -113,7 +113,7 @@ function gravityCheck(s, now, sign){
 
 // THE CURRENT WALK'S TIP RULE (forward-walk.js Controller.tick), for the old policy walker that stays as the fallback.
 // Tilt = the angle of measured gravity in the walk's frame [y, -x, z]: never beta/gamma one Euler angle at a time
-// (near a vertical mount they jump, and max(angDelta(beta), angDelta(gamma)) > 55 stopped a tester's upright phone).
+// (near a vertical mount they jump, and max(angDelta(beta), angDelta(gamma)) > 55 stopped a builder's upright phone).
 // Armed 1 s after the first tick, then 5 in a row tip it: past 115 deg (face down), flat under 15 deg from a raised
 // start (on its back), or more than 55 deg onto a side. 6 in a row of linear acceleration over 11 m/s^2 is a grab.
 export class TipGuard {

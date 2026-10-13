@@ -53,7 +53,7 @@ var IDENTITY_CORE_CAP = 240;
    0929 ALWAYS ON (Brit: "i don't think we need toggle there let's just have it on always"): there is no
    switch. HOW MUCH A CREATURE KEEPS, in one place: every cap on who it is (identity, rules, bright moments,
    diary) is read through soulLimits(), and every list a write ADDS to is trimmed through soulRoll().
-   Nothing else in the engine or the page carries these numbers. Research: internal notes (0928).
+   Nothing else in the engine or the page carries these numbers. Research: internal notes.
    Every soul gets the big caps. The old switch, dream.limits.expanded, is ignored: a soul someone turned
    off on 0928 reads as on, and its next save drops the key (cleanDreamLimits), so no build reads it as off
    again (the 0928 build reads a soul with no switch as on too). No number in a file or a store can move a
