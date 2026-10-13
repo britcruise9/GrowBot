@@ -8,6 +8,7 @@ Thanks for wanting to help build GrowBot. This project runs on a small amount of
 - Keep pull requests small. Aim for about 300 lines or less. Big PRs are hard to review and slow everyone down. If a change is genuinely large, open an issue first so we can talk about how to split it.
 - Open an issue before starting anything big, so we don't both build the same thing or head in a direction that won't merge.
 - Be kind and specific in reviews. "This breaks on an empty list at line 42" helps. "Fix this" does not.
+- `app/` is a read-only copy of the live app and gets replaced on every snapshot, so a PR against it would be overwritten. Open an issue or post in Discord instead, and I'll fix it at the source.
 
 ## Licensing your contribution
 
@@ -58,4 +59,4 @@ Plenty can still be merged, and we will work it out.
 - Do not bundle several unrelated changes into one PR.
 - Do not open a giant rewrite without talking first.
 
-If you are not sure about something, open an issue and ask. That is always welcome.
+If you are not sure about something, open an issue or ask in the [GrowBot Discord](https://discord.gg/wCnAVaH4zR). That is always welcome.

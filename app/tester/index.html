@@ -1,0 +1,228 @@
+<!DOCTYPE html><html><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name=theme-color content="#05070d">
+<title>GrowBot calibration</title><style>
+:root{color-scheme:dark;--bg:#05070d;--panel:#0e1622;--line:rgba(120,160,200,.25);--text:#e8f6ff;--mut:#7f93ab;--teal:#37e0c8;--blue:#5ab0ff;--red:#8c1d2f}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:system-ui;-webkit-user-select:none;user-select:none}
+.app{display:flex;flex-direction:column;height:100%}
+.screen{position:absolute;top:0;left:0;right:0;bottom:0;display:none;flex-direction:column}
+.screen.show{display:flex}
+/* ── FORK landing ── */
+#fork{align-items:center;justify-content:center;gap:18px;padding:26px;text-align:center}
+#fork .h{font-size:15px;font-weight:800;color:var(--teal);letter-spacing:.04em}
+#fork .sub{font-size:12px;color:var(--mut);line-height:1.6;max-width:330px}
+.big{width:100%;max-width:340px;padding:24px 18px;border-radius:14px;border:1px solid #2a3a4d;background:#101826;color:#dfe8f3;font-size:19px;font-weight:600;display:flex;flex-direction:column;gap:6px;align-items:center}
+.big small{font-size:12px;font-weight:500;color:var(--mut);line-height:1.5}
+.big:active{transform:translateY(1px)}
+.big[disabled]{opacity:.45;border-style:dashed}
+.big[disabled]:active{transform:none}
+/* primary path — the button we want everyone to take */
+.big.primary{border-color:var(--teal);background:#0f1f24;box-shadow:0 0 0 1px rgba(55,224,200,.35),0 6px 20px rgba(55,224,200,.12)}
+.big.primary small b{color:var(--teal);font-weight:800;letter-spacing:.09em}
+/* experimental path — deliberately smaller + quieter so it doesn't read as the main door */
+.big.exp{max-width:260px;padding:13px 16px;font-size:15px;font-weight:500;color:var(--mut);border-style:dashed;border-color:#2a3a4d;background:transparent;opacity:.7}
+.big.exp:hover{opacity:.9}
+.big.exp small{font-size:11px}
+.big.exp .tag{font-size:9px;font-weight:800;letter-spacing:.1em;color:#0e1622;background:var(--mut);border-radius:999px;padding:2px 7px;margin-left:6px;vertical-align:middle}
+/* ── CONNECT handshake ── */
+#connect{align-items:center;justify-content:center;gap:16px;padding:26px;text-align:center}
+#connect .h{font-size:14px;font-weight:800;color:var(--blue)}
+#cid{width:100%;max-width:300px;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:11px;padding:12px;font-size:15px;text-align:center}
+.cbtn{width:100%;max-width:300px;padding:16px;border-radius:8px;border:1px solid #2a3a4d;background:#101826;color:#dfe8f3;font-size:16px;font-weight:600}
+.cbtn[disabled]{opacity:.5;color:var(--mut)}
+#cstat{font-size:12px;color:var(--mut);min-height:1.3em;line-height:1.5;max-width:320px}
+.cdot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#445;margin-right:6px;vertical-align:middle}
+.cdot.on{background:var(--teal);box-shadow:0 0 8px var(--teal)}
+#chs svg{display:block;margin:6px auto}
+.link{background:none;border:0;color:var(--mut);font-size:12px;text-decoration:underline;padding:6px}
+/* ── ROBOT remotes (tabbed) ── */
+#robot{flex-direction:column}
+.bar{display:flex;gap:8px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--line);background:#070b12}
+.bar .home{background:#101826;border:1px solid #2a3a4d;color:var(--mut);border-radius:8px;padding:7px 9px;font-size:13px;font-weight:600}
+.bar .ttl{font-size:12px;font-weight:800;color:var(--blue);white-space:nowrap;display:flex;align-items:center}
+.bar small{color:var(--mut);font-size:10px;margin-left:auto;white-space:nowrap}
+/* SIMPLE/EXPERT global mode toggle (0715) */
+.seg{display:flex;border:1px solid #2a3a4d;border-radius:8px;overflow:hidden;background:#0a121c;margin-left:6px;flex:0 0 auto}
+.seg button{border:0;background:transparent;color:var(--mut);font-size:10px;font-weight:800;letter-spacing:.05em;padding:6px 8px}
+.seg button.on{background:#16283a;color:var(--teal)}
+.tabs{display:flex;border-bottom:1px solid var(--line);background:#070b12}
+.tab{flex:1;display:flex;align-items:center;justify-content:center;gap:2px;padding:11px 2px;font-size:11px;font-weight:700;color:var(--mut);background:transparent;border:0;border-bottom:2px solid transparent;white-space:nowrap}
+.tab.on{color:var(--text);border-bottom-color:var(--teal)}
+.stage{flex:1;position:relative;background:var(--bg)}
+iframe{position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;border:0;background:var(--bg)}
+.hide{display:none}
+</style></head><body>
+<div class=app>
+
+ <!-- ① FORK: an optional calibration area, not a step on the way to waking GrowBot (Brit 10-06) -->
+ <div class="screen show" id=fork>
+   <div class=h>Calibration (optional)</div>
+   <div class=sub>Check or fine-tune a robot you've built. GrowBot pairs and wakes on its own, so you don't need this to wake it.</div>
+   <button class="big robot" id=wrobot>Connect robot<small>leg trim · walk test · face direction · LLM</small></button>
+ </div>
+
+ <!-- ② CONNECT handshake (robot only) -->
+ <div class=screen id=connect>
+   <div class=h>Connect your robot</div>
+   <div class=sub>Power on the robot. It prints a pairing code on boot (like gb-xxxxxx). Enter it here.</div>
+   <input id=cid placeholder="pairing code from your robot" autocomplete=off autocapitalize=off spellcheck=false>
+   <div id=cstat><span class="cdot" id=cdot></span><span id=cmsg>enter your robot's pairing code</span></div>
+   <div id=chs></div>
+   <button class=cbtn id=cgo disabled>enter a code to connect</button>
+   <button class=link id=cback>back</button>
+   <a class=link href="/build3.html">No robot yet? Start with the build guide</a>
+ </div>
+
+ <!-- ②b PICKER: what to do with the connected robot -->
+ <div class=screen id=pick style="align-items:center;justify-content:center;gap:14px;padding:26px;text-align:center">
+   <div class=h style="font-size:14px;font-weight:800;color:var(--blue)">Connected to <span id=pickid></span></div>
+   <button class="big primary" id=pkphone>🎛 Calibrate &amp; test<small>legs, walk, face</small></button>
+   <button class="big exp" id=pkcustom>🔌 Custom agent <span class=tag>EXPERIMENTAL</span><small>advanced · bring your own local model</small></button>
+   <a class=link id=pkopen target=_top hidden>Open GrowBot with this robot</a>
+   <button class=link id=pkback>back</button>
+ </div>
+
+ <!-- ③ ROBOT remotes -->
+ <div class=screen id=robot>
+   <div class=bar>
+     <button class=home id=rhome>home</button>
+     <span class=ttl><span id=rid></span></span>
+     <small id=rstat>relay</small>
+     <div class=seg><button id=segS>SIMPLE</button><button id=segE>EXPERT</button></div>
+   </div>
+   <div class=tabs id=tabs>
+     <button class="tab on" data-i=0>Calibrate</button>
+     <button class=tab data-i=1>Move</button>
+     <button class=tab data-i=2>LLM</button>
+     <button class=tab data-i=3>Face</button>
+     <button class=tab data-i=4>🔌</button>
+   </div>
+   <div class=stage id=stage>
+     <iframe id=f0 class=hide allow="autoplay; microphone; camera; gyroscope; accelerometer; magnetometer; fullscreen" allowfullscreen></iframe>
+     <iframe id=f1 class=hide allow="autoplay; microphone; camera; gyroscope; accelerometer; magnetometer; fullscreen" allowfullscreen></iframe>
+     <iframe id=f2 class=hide allow="autoplay; microphone; camera; gyroscope; accelerometer; magnetometer; fullscreen" allowfullscreen></iframe>
+     <iframe id=f3 class=hide allow="autoplay; microphone; camera; gyroscope; accelerometer; magnetometer; fullscreen" allowfullscreen></iframe>
+     <iframe id=f4 class=hide allow="autoplay; microphone; camera; gyroscope; accelerometer; magnetometer; fullscreen" allowfullscreen></iframe>
+   </div>
+ </div>
+
+</div>
+<script type="module">
+import { RelayBody } from '/relay-transport.js';   // shared transport — the handshake discovers the chip with it
+const $=id=>document.getElementById(id);
+const qp=new URLSearchParams(location.search);
+
+// ── shared device id (pairing code) ──
+let devId = qp.get('id') || (function(){ try{ return localStorage.getItem('gb_walk_id'); }catch(e){ return ''; } })() || '';
+
+function screen(name){ document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('show', s.id===name)); }
+
+// ── ① FORK ──
+// 10-06 (Brit): /tester is an OPTIONAL calibration area, not the first path after a build. Build step 07
+// sets trim and step 09's scan opens GrowBot itself, so nothing here is needed to wake it. This page no
+// longer hosts a creature in any iframe: the old "skip (no robot)" phone lane and the 🌱 Agent tab (both
+// embedded /v3/next.html) are gone. A robot owner who wants GrowBot gets ONE plain top-level link on the
+// picker (#pkopen), and a person with no robot is pointed at the build guide.
+$('wrobot').onclick=()=>{ $('cid').value=devId; screen('connect'); startProbe(); };
+
+// ── ② CONNECT handshake: attach to the relay, wait for the chip, wiggle to confirm, then enter ──
+let probe=null, online=false, paired=false;
+function setOnline(on){ online=on;
+  if(on && !paired){ paired=true; try{ navigator.sendBeacon('/api/hit','pair'); }catch(e){} }   // count a successful pair ONCE per session (green dot = chip live on the relay)
+  $('cdot').className='cdot'+(on?' on':'');                       // stable element — only the class changes
+  $('cmsg').textContent = on?('robot '+devId+' is online'):('searching for '+devId+'…');
+  $('cgo').disabled=!on; $('cgo').textContent=on?'connect (wiggle test)':'searching…'; }
+function noCode(){ online=false; $('cdot').className='cdot'; $('cmsg').textContent="enter your robot's pairing code"; $('cgo').disabled=true; $('cgo').textContent='enter a code to connect'; }
+function startProbe(){
+  stopProbe(); devId=$('cid').value.trim().toLowerCase();   // codes are lowercase hex off machine.unique_id(); phone keyboards auto-capitalize and the relay's idFromName is case-sensitive, so "Gb-a3f9c1" silently opens a DIFFERENT empty room and sits at "searching…" forever
+  if(!devId){ noCode(); return; }                                 // no code yet → wait for one (don't default to a shared id)
+  try{ localStorage.setItem('gb_walk_id',devId); }catch(e){}
+  setOnline(false);
+  probe=new RelayBody(devId,{ onStatus:a=>setOnline(!!a) });
+  probe.connect();
+}
+function stopProbe(){ if(probe){ try{ probe.close(); }catch(e){} probe=null; } }
+$('cid').addEventListener('change',startProbe);
+$('cgo').onclick=()=>{
+  if(!online||!probe) return;
+  // the handshake wiggle: legs sweep left then right then center — "I'm connected"
+  $('cgo').disabled=true; $('cgo').textContent='wiggling…';
+  try{ probe.act([{l:120,r:60,ms:260},{l:60,r:120,ms:260},{l:90,r:90,ms:240}],'replace'); }catch(e){}
+  setTimeout(enterRobot, 900);   // let the wiggle play, then hand off to the remotes
+};
+$('cback').onclick=()=>{ stopProbe(); screen('fork'); };
+
+// ── ②b PICKER: 🎛 Calibrate & test (tabs 0-3), 🔌 Custom agent (tab 4), or leave for GrowBot itself ──
+// GrowBot with this robot: the same address the old 🌱 Agent tab framed, minus the cache-bust, opened
+// top-level in this tab (never an iframe). Only with a code; hidden otherwise, so it can never open a
+// legs-mode GrowBot for a robot nobody named.
+function openLink(){ const a=$('pkopen');
+  if(devId){ a.href='/v3/next.html?id='+encodeURIComponent(devId)+'&mode=legs'; a.hidden=false; }
+  else { a.removeAttribute('href'); a.hidden=true; } }
+function enterRobot(){
+  stopProbe();                   // CLOSE the handshake socket BEFORE anything mounts (one relay writer at a time)
+  // NO CODE, NO PICKER. `devId||'bench'` printed "Who drives bench?" at a person with no robot, which
+  // is both meaningless and a leftover of the F-29 shared-room bug where an empty id really did mount
+  // 'bench'. The picker only chooses who drives a robot that exists; with no code, say so on the
+  // screen the pairing field is actually on. (Same recovery the 0909 mount fix uses, for the same
+  // reason: noCode writes into #cmsg, which lives on #connect.)
+  if(!devId){ noCode(); openLink(); screen('connect'); return; }
+  $('pickid').textContent=devId;
+  openLink();
+  screen('pick');
+}
+function enterTabs(i){
+  $('rid').textContent=devId;
+  screen('robot');
+  show(i);
+}
+$('pkphone').onclick=()=>enterTabs(0);   // 🎛 Calibrate & test lands on the Calibrate tab, with the tab bar
+$('pkcustom').onclick=()=>enterTabs(4);  // 🔌 Custom agent = external-brain surface (/tester/custom.html): paste an OpenAI-compatible local endpoint, or dial in your own script. Docs name it "Custom agent" (agent-docs.html, LOCAL_MODELS.md).
+$('pkback').onclick=()=>{ screen('fork'); };
+
+// ── ③ ROBOT remotes (lazy single-writer iframes — reused from the tester shell) ──
+function srcFor(i){ const q='?id='+encodeURIComponent(devId)+'&_v='+Date.now();   // ABSOLUTE paths + cache-bust so a fresh deploy always loads
+  return [ '/tester/motor.html'+q, '/tester/policy.html'+q+(qp.get('forwardbasic')==='1'?'&forwardbasic=1':''), '/tester/llm.html'+q, '/tester/face.html'+q, '/tester/custom.html'+q ][i]; }   // 0=Calibrate (motor.html) 1=Move (policy.html) 2=LLM 3=Face (face-track) 4=🔌 Custom agent (agent-gateway). No tab hosts GrowBot itself (10-06). Iframes carry mic/camera/IMU allow + ?id=devId.
+let cur=-1;
+function mount(i){ if(!devId){ try{ console.warn('growbot: no pairing code — refusing to mount a remote'); }catch(e){} noCode(); cur=-1; screen('connect'); return; }   /* 0903 F-29: srcFor used to fall back to id='bench' when devId was empty, mounting the customer into a SHARED relay room where a stranger could drive their robot and vice versa (the relay accepts any attach: worker.js phase-5 auth is still a TODO). Refuse and send them back to the pairing field, which is one step away.
+     0909 (spinal, "Am I supposed to have a blank page?"): THE REFUSAL WAS RIGHT AND THE RECOVERY WAS BROKEN, in two places. (1) It called screen('robot') — the screen the person is ALREADY on, whose stage is six empty iframes — while noCode() wrote "enter your robot's pairing code" into #cmsg, which lives on the #connect screen this line then HIDES. So the guard explained itself to a screen nobody could see and left a black page. The pairing field is #connect; say so. (2) show() sets cur=i BEFORE calling mount(), so a refused tab still owned `cur` — and show()'s `if(i===cur) return` then swallowed the retry, leaving Calibrate blank even AFTER the person paired correctly. Releasing cur is what makes the second attempt work without a reload. Both halves are needed; either one alone still ends in a blank stage. */
+  const f=$('f'+i); f.src=srcFor(i); f.classList.remove('hide'); }
+function teardown(i){ if(i<0) return; const f=$('f'+i); f.src='about:blank'; f.classList.add('hide'); }
+function show(i){
+  if(i===cur) return;
+  const prev=cur;
+  teardown(cur); cur=i;
+  document.querySelectorAll('#tabs .tab').forEach(t=>t.classList.toggle('on',+t.getAttribute('data-i')===i));
+  /* 0811 CAMERA HANDOFF (a tester's frozen wake-frame): iOS WebKit releases a destroyed
+     document's camera LAZILY — a getUserMedia issued during that window can return a track that
+     delivers a few frames then mutes forever (the agent woke, saw one picture of the tester, froze on
+     it). Leaving the camera-holding tab (3=Face, the only one since the Agent tab went 10-06) waits
+     350ms before mounting the next, so the claim lands after the release. */
+  if(prev===3){ setTimeout(()=>{ if(cur===i) mount(i); },350); }
+  else mount(i);
+}
+document.querySelectorAll('#tabs .tab').forEach(t=>{
+  t.addEventListener('click',()=>{ show(+t.getAttribute('data-i')); });
+});
+
+// ── SIMPLE/EXPERT ui mode (0715): global toggle, persisted per device; the Policy/LLM iframes
+//    read localStorage.gb_ui_mode on load (simple = guided ladder, expert = the full remotes).
+//    Flipping remounts the open tab so it re-reads the mode. Default = simple (launch is
+//    newbie-first; DIYers flip once and it sticks). ──
+function uiMode(){ try{ return localStorage.gb_ui_mode||'simple'; }catch(e){ return 'simple'; } }
+function paintMode(){ const m=uiMode(); $('segS').classList.toggle('on',m!=='expert'); $('segE').classList.toggle('on',m==='expert'); }
+function setUiMode(m){ try{ localStorage.gb_ui_mode=m; }catch(e){} paintMode();
+  if(cur>=0){ const i=cur; teardown(cur); cur=-1; show(i); } }
+$('segS').onclick=()=>setUiMode('simple');
+$('segE').onclick=()=>setUiMode('expert');
+paintMode();
+window.addEventListener('message',e=>{ const d=e.data||{};   // 'mode' is the only message: there is no agent tab to launch since 10-06, so an old ladder's launch post does nothing (it used to show(4), now 🔌)
+  if(d.gb==='mode'&&d.mode){ try{ localStorage.gb_ui_mode=d.mode; }catch(_){} paintMode(); } });   // in-page escape link keeps the seg honest
+$('rhome').onclick=()=>{ teardown(cur); cur=-1; enterRobot(); };   // home = this robot's picker, where Open GrowBot lives (its back goes on to the fork). It used to drop to the fork, so the link was a whole re-handshake away from the tabs.
+
+// deep-link: ?go=robot jumps straight to pairing (build step 09's optional link, ESP32 guide). ?id= prefills the code.
+const go=qp.get('go');
+if(go==='robot'){ $('cid').value=devId; screen('connect'); startProbe(); }
+</script><script src="/feedback-widget.js" data-surface="controller"></script>
+</body></html>

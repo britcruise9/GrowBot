@@ -4,6 +4,8 @@
 *.key
 *.pem
 secrets/
+secrets.py
+firmware/secrets.py
 config.js
 
 # Python

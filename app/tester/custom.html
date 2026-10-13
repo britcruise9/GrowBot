@@ -1,0 +1,264 @@
+<!DOCTYPE html><html><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="color-scheme" content="dark">
+<title>Custom Agent · GrowBot</title><style>
+:root{color-scheme:dark;--bg:#05070d;--panel:#0e1622;--line:rgba(120,160,200,.25);--text:#e8f6ff;--mut:#7f93ab;--teal:#37e0c8;--blue:#5ab0ff;--red:#ff6b81}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui;-webkit-user-select:none}
+.wrap{display:flex;flex-direction:column;min-height:100vh;padding:8px;box-sizing:border-box;gap:7px}
+.top{display:flex;gap:6px;align-items:center}
+#id{flex:1;min-width:0;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:9px;font-size:13px}
+.dot{width:11px;height:11px;border-radius:50%;background:#445;flex:0 0 auto}
+.dot.on{background:var(--teal);box-shadow:0 0 8px var(--teal)}
+button{font-size:14px;padding:11px 8px;background:#101826;color:#dfe8f3;border:1px solid #2a3a4d;border-radius:8px;font-weight:600}
+a{color:var(--blue)}
+.card{background:#0a121c;border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:7px}
+.lbl{font-size:10px;color:var(--mut);letter-spacing:.06em;font-weight:800}
+#ep{width:100%;box-sizing:border-box;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:13px}
+.hint{font-size:10.5px;color:#5a6b85;line-height:1.45}
+.mode{font-size:10px;font-weight:800;border-radius:999px;padding:2px 8px;background:#12202e;color:var(--blue);align-self:flex-start}
+.mode.in{background:#10261f;color:var(--teal)}
+.row{display:flex;gap:6px;align-items:center}
+.row>*{min-width:0}
+#msel,#goal{flex:1;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:9px;padding:9px;font-size:13px}
+#run{flex:0 0 auto;padding:10px 16px}
+#run.on{border-color:var(--teal);color:var(--teal)}
+/* status screen */
+.st{display:flex;flex-direction:column;gap:5px}
+.strow{display:flex;gap:8px;align-items:baseline;font-size:12px;color:var(--mut)}
+.strow b{color:#cfe;font-weight:700}
+#verb{font-size:17px;color:var(--teal);font-weight:700;min-height:1.3em;word-break:break-all}
+#verbmeta{font-size:11px;color:var(--mut)}
+#sens{font:11px/1.5 ui-monospace,monospace;color:#9fb6cf;white-space:pre-wrap}
+.duty{height:5px;border-radius:4px;background:#13202e;overflow:hidden}
+.duty i{display:block;height:100%;background:var(--teal);width:100%;transition:width .3s}
+#stop{color:var(--red)}
+#trace{flex:1;min-height:70px;background:#070b12;border:1px solid var(--line);border-radius:10px;padding:6px 8px;font:11px/1.5 ui-monospace,monospace;color:#9fb6cf;overflow:auto;white-space:pre-wrap}
+#trace .net{color:var(--blue)}#trace .err{color:#ff7a90}#trace .mv{color:var(--teal)}#trace .raw{color:#8aa0b8}
+#start{position:fixed;top:0;left:0;right:0;bottom:0;margin:auto;width:84%;height:30%;font-size:22px}
+code{background:#101826;border-radius:5px;padding:1px 5px;font-size:11px}
+</style></head><body>
+<button id=start>WAKE</button>
+
+<div class=wrap style=display:none id=ui>
+ <div class=top>
+   <span class=dot id=dot></span>
+   <input id=id placeholder="device id">
+   <a href="/agent-docs.html" target=_blank style="font-size:12px;white-space:nowrap">how it works ↗</a>
+ </div>
+
+ <div class=card>
+   <span class=lbl>EXTERNAL BRAIN — one endpoint</span>
+   <input id=ep placeholder="http://localhost:11434/v1  — or leave empty to accept an inbound agent" autocomplete=off autocapitalize=off spellcheck=false>
+   <span class=mode id=mode>INBOUND — waiting for an agent to dial in</span>
+   <div class=hint id=mhint></div>
+   <div class=row id=outrow style=display:none>
+     <select id=msel><option value="">model…</option></select>
+     <button id=run>START</button>
+   </div>
+   <div class=row id=goalrow style=display:none>
+     <input id=goal placeholder="goal for the agent (optional) — e.g. say hi, then take a little walk">
+   </div>
+ </div>
+
+ <div class="card st">
+   <span class=lbl>STATUS — live while the external agent drives</span>
+   <div class=strow><span>robot</span><b id=srobot>offline</b><span style=margin-left:auto>brain</span><b id=sbrain>—</b></div>
+   <div class=strow><span>last verb</span></div>
+   <div id=verb>—</div>
+   <div id=verbmeta></div>
+   <div id=sens>sensors: —</div>
+   <div class=strow><span>motion budget</span><b id=sduty></b></div>
+   <div class=duty><i id=dutyb></i></div>
+ </div>
+
+ <div class=row><button id=stop style=flex:1>STOP — legs limp</button></div>
+ <div id=trace></div>
+</div>
+
+<script src="/v3/agent_kernel.js"></script>
+<!-- 1006: the app's current motion lane, the same files and versions v3/next.html loads. The gateway runs forward as the
+     screen-forward walk (and the no-gyro specialist on a phone without a gyro) and turn as the R3 normal spin. -->
+<script src="/forward-walk.js?v=1001"></script>
+<script src="/normal-spin.js?v=1005"></script>
+<script src="/forward-basic.js?v=1001"></script>
+<script type="module" src="/forward-choice.mjs?v=1001"></script>
+<script type="module">
+import { loadBodyTruth, SafeBody, AgentChannel, ForwardCapture } from '/agent-gateway.js';
+const $=id=>document.getElementById(id);
+const qp=new URLSearchParams(location.search);
+
+const tEl=$('trace');
+function trace(line,kind){ const d=document.createElement('div'); if(kind)d.className=kind; d.textContent='> '+line; tEl.appendChild(d); while(tEl.childElementCount>160)tEl.removeChild(tEl.firstChild); tEl.scrollTop=tEl.scrollHeight; }
+
+// ── sensors (this device's IMU feeds the walk policy + the obs ticker) ──
+let ori=null, rate={a:0,b:0,g:0}, accel=null;
+const capture=new ForwardCapture();   // 1006: the app's stock-walk capture (gyro + gravity samples, gravity sign measured from orientation), one clock: performance.now()
+window.addEventListener('deviceorientation',e=>{ capture.orientation(e,performance.now()); if(e.alpha==null&&e.beta==null&&e.gamma==null)return; ori={a:e.alpha||0,b:e.beta||0,g:e.gamma||0}; });
+window.addEventListener('devicemotion',e=>{ capture.motion(e,performance.now()); const g=e.accelerationIncludingGravity; if(g&&(g.x!=null||g.y!=null||g.z!=null)) accel={x:g.x||0,y:g.y||0,z:g.z||0};
+  const r=e.rotationRate; if(r) rate={a:r.alpha||0,b:r.beta||0,g:r.gamma||0}; });
+function requestMotion(){ // iOS: sensors only unlock inside a user gesture
+  try{ if(window.DeviceMotionEvent&&typeof DeviceMotionEvent.requestPermission==='function'){ DeviceMotionEvent.requestPermission().catch(()=>{}); DeviceOrientationEvent.requestPermission&&DeviceOrientationEvent.requestPermission().catch(()=>{}); } }catch(e){}
+}
+const sensors=()=>({ori,rate,accel});
+
+// ── gateway (SafeBody = clamps + body truth + reflexes; AgentChannel = inbound wire) ──
+let gate=null, chan=null, bootSeq=0;
+async function boot(id){
+  const mine=++bootSeq;
+  if(chan){ chan.close(); chan=null; }
+  if(gate){ gate.close(); gate=null; }
+  let bt;
+  try{ bt=await loadBodyTruth(); }catch(e){ trace('body truth failed to load: '+e.message,'err'); return; }
+  if(mine!==bootSeq) return;   // a newer boot() (rapid device-id change) superseded us — don't leak a 2nd relay writer
+  gate=new SafeBody(id,{ bodyTruth:bt, sensors, motion:capture, onTrace:trace, onState:paint });
+  gate.connect();
+  chan=new AgentChannel(gate,{ onAgent:paintAgent, onVerb:(a,ack)=>{ trace('ack: '+(ack.ok?(ack.note||'ok'):('✗ '+ack.error)), ack.ok?'mv':'err'); } });
+  trace('gateway up on "'+id+'"','net');
+  manageChannel();   // connect the inbound channel only in inbound mode
+  paint();
+}
+// The inbound agent channel drives ONLY in inbound mode. In endpoint (outbound) mode
+// THIS page is the driver, so we close the channel — otherwise a stray inbound agent
+// could fight the endpoint loop for the same body. (review 0712)
+function manageChannel(){
+  if(!chan) return;
+  if(mode()==='in'){ chan.connect(); $('mhint').textContent=inHint(); }
+  else chan.close();
+}
+// A non-empty field that is NOT a URL silently stays INBOUND and looks like a dead
+// endpoint. Say so instead of sitting there waiting for a dial-in. (0730)
+function inHint(){
+  if($('ep').value.trim()) return 'that is not a URL, so nothing will dial out. Endpoint mode needs a leading https:// (or http://localhost). Leave this field EMPTY for inbound.';
+  return 'inbound: point your agent at wss://…/d/'+(chan?chan.chan:'<device id>-agent')+' , see "how it works" for the 5-line handshake.';
+}
+
+// ── status screen ──
+let agentSeenTxt='—';
+function paintAgent(seen,sAgo){ if(mode()==='in') agentSeenTxt = seen?('agent connected ('+sAgo+'s ago)'):(sAgo==null?'waiting for an agent…':'agent quiet ('+sAgo+'s)'); paint(); }
+function paint(){
+  $('dot').className='dot'+(gate&&gate.robotAwake?' on':'');
+  $('srobot').textContent=gate&&gate.robotAwake?'online':'offline';
+  $('sbrain').textContent = mode()==='in' ? agentSeenTxt : (running?('endpoint driving ('+($('msel').value||'?')+')'):'endpoint idle');
+  if(gate&&gate.last){ $('verb').textContent=gate.last.verb+(gate.last.ok?'':' ✗'); $('verbmeta').textContent=(gate.last.note||'')+' · '+Math.round((Date.now()-gate.last.t)/1000)+'s ago'; }
+  if(gate){ const cap=(gate.limits&&gate.limits.duty_ms)||20000, left=gate.dutyLeftMs();
+    $('sduty').textContent=(left/1000).toFixed(1)+'s of '+(cap/1000)+'s · '+(gate.driving!=='idle'?('driving: '+gate.driving):'idle');
+    $('dutyb').style.width=Math.round(100*left/cap)+'%'; }
+}
+setInterval(()=>{ // sensor ticker — live even (especially) while an external agent drives
+  const o=ori?('α'+Math.round(ori.a)+'° β'+Math.round(ori.b)+'° γ'+Math.round(ori.g)+'°'):'no IMU on this device';
+  const a=accel?(' · accel '+accel.x.toFixed(1)+','+accel.y.toFixed(1)+','+accel.z.toFixed(1)):'';
+  $('sens').textContent='sensors: '+o+a+(ori?(' · gravity '+(capture.measured?'measured':'measuring, hold still')):'');
+  paint();
+},250);
+
+// ── ONE endpoint field: empty = inbound; http(s):// = OpenAI-compatible outbound ──
+function mode(){ return /^https?:\/\//i.test($('ep').value.trim()) ? 'out' : 'in'; }
+function paintMode(){
+  const m=mode();
+  $('mode').textContent = m==='in' ? 'INBOUND — waiting for an agent to dial in' : 'OPENAI-COMPATIBLE ENDPOINT — this page drives the loop';
+  $('mode').className='mode'+(m==='in'?' in':'');
+  $('outrow').style.display = m==='out'?'flex':'none';
+  $('goalrow').style.display = m==='out'?'flex':'none';
+  if(m==='in') $('mhint').textContent=inHint();
+  else $('mhint').textContent='THIS browser makes the call, so two browser rules apply that curl ignores. (1) mixed content: an https page can only reach an https endpoint, or http://localhost in Chrome (Safari blocks even that), so a plain-http server on your LAN can never connect. Put https in front of it (cloudflare tunnel, ngrok) or use inbound mode. (2) CORS must be ON. LM Studio: enable CORS in the server tab. Ollama: OLLAMA_ORIGINS=\'*\' ollama serve.';
+}
+$('ep').addEventListener('input',()=>{ paintMode(); manageChannel(); });
+$('ep').addEventListener('change',()=>{ stopLoop(); paintMode(); manageChannel(); if(mode()==='out') discover(); });
+
+// ── outbound: model discovery + the drive loop ──
+let base='', running=false, loopBusy=false, hist=[];
+function norm(u){ u=u.trim().replace(/\/+$/,''); return u.replace(/\/chat\/completions$/,''); }
+// ngrok free-tier answers every request with an HTML "you are about to visit" page
+// UNLESS this header is sent — LM Studio never even sees the request. That page comes
+// back as a plain 200, so it looks exactly like a reachable-but-empty server: r.ok is
+// true and only r.json() fails. Send it always; harmless against non-ngrok hosts. (0730)
+const XHDR={'ngrok-skip-browser-warning':'true'};
+async function tryModels(b){ const r=await fetch(b+'/models',{headers:XHDR}); if(!r.ok) throw new Error('HTTP '+r.status);
+  let j; try{ j=await r.json(); }catch(e){ throw new Error('non-JSON response (ngrok interstitial or wrong port)'); }
+  const ids=(j&&j.data&&j.data.map(m=>m.id))||[]; if(!ids.length) throw new Error('no models'); return ids; }
+// Mixed content and CORS both surface as a bare "Failed to fetch", so classify the
+// certain one (mixed content) from the URL BEFORE probing. Otherwise a request the
+// browser never even sent reads as "server down" and the tester chases the wrong bug.
+// Chrome exempts localhost from the https-page rule; Safari does not. (0730)
+const isLocal=h=>h==='localhost'||h==='127.0.0.1'||h==='[::1]'||/\.localhost$/i.test(h);
+const isSafari=()=>/^((?!chrome|crios|chromium|android).)*safari/i.test(navigator.userAgent);
+function mixedBlock(u){
+  if(location.protocol!=='https:') return null;
+  let p; try{ p=new URL(u); }catch(e){ return null; }
+  if(p.protocol!=='http:') return null;
+  if(!isLocal(p.hostname)) return 'hard';
+  return isSafari() ? 'safari' : null;
+}
+async function discover(){
+  base=norm($('ep').value); $('msel').innerHTML='<option value="">probing…</option>';
+  const blocked=mixedBlock(base);
+  if(blocked){ $('msel').innerHTML='<option value="">blocked by the browser</option>';
+    trace(blocked==='hard'
+      ? 'MIXED CONTENT: this page is https, so the browser refuses to call '+base+' over plain http (only localhost is exempt). The request never leaves, which is why curl works and this does not. Fix: put https in front of the model server (cloudflare tunnel, ngrok) and paste that URL, or leave the field EMPTY and use inbound mode.'
+      : 'MIXED CONTENT: Safari blocks http://localhost from an https page even though Chrome allows it. Use Chrome, or leave the field EMPTY and use inbound mode.','err');
+    return; }
+  let ids=null, lastErr=null;
+  try{ ids=await tryModels(base); }
+  catch(e1){ lastErr=e1; if(!/\/v1$/.test(base)){ try{ ids=await tryModels(base+'/v1'); base=base+'/v1'; }catch(e2){ lastErr=e2; } } }
+  if(!ids){ $('msel').innerHTML='<option value="">endpoint unreachable</option>';
+    const isNgrok=/\.ngrok(-free)?\.(app|io|dev)$/i.test((()=>{try{return new URL(base).hostname;}catch(e){return'';}})());
+    if(/no models/.test((lastErr&&lastErr.message)||'')) trace('reached '+base+' but it returned an EMPTY model list. LM Studio: load/select a model in the server tab so /v1/models has something to report.','err');
+    else if(isNgrok) trace('non-JSON response from '+base+' — almost certainly ngrok\'s free-tier browser-warning interstitial page answering instead of LM Studio. If this persists, ngrok may need the request to look non-programmatic in a different way; try the ngrok dashboard\'s "visit site" once from this same browser first, or switch to a Cloudflare tunnel.','err');
+    else trace('could not reach '+base+'/models. The browser did send the request, so it is one of: server not running, wrong host/port, or CORS is off. LM Studio: enable CORS in the server tab. Ollama: OLLAMA_ORIGINS=\'*\' ollama serve.','err');
+    return; }
+  $('msel').innerHTML=ids.map(i=>'<option>'+String(i).replace(/[<>&]/g,'')+'</option>').join('');
+  trace('endpoint ok ('+base+') — '+ids.length+' model(s)','net');
+}
+let loopGen=0;   // STOP class (0906): bumped on every stop; a reply that was in flight when STOP landed is discarded, never executed
+function stopLoop(){ running=false; loopGen++; $('run').textContent='START'; $('run').classList.remove('on'); paint(); }
+$('run').onclick=()=>{ if(running){ stopLoop(); trace('agent loop stopped','net'); return; }
+  if(!gate){ trace('no gateway — set a device id','err'); return; }
+  if(!$('msel').value){ trace('no model — check the endpoint','err'); return; }
+  running=true; hist=[]; $('run').textContent='STOP'; $('run').classList.add('on'); trace('agent loop started ('+$('msel').value+')','net'); loop(); };
+
+async function loop(){
+  if(!running||loopBusy) return;
+  if(!gate){ if(running) setTimeout(loop,500); return; }   // gateway torn down mid-run (device-id change) — wait for the new one, don't crash
+  if(document.hidden){ setTimeout(loop,1500); return; }   // backgrounded: don't burn the local model blind
+  loopBusy=true; const gen=loopGen; const sg=gate.stopGen|0;   // the generation this reply is produced under (gateway STOP generation)
+  const obs=gate.obsFrame();
+  const goal=$('goal').value.trim();
+  const msgs=[{role:'system',content:gate.prompt}];
+  hist.slice(-3).forEach(h=>{ msgs.push({role:'user',content:h.u}); msgs.push({role:'assistant',content:h.a}); });
+  const u='observation: '+JSON.stringify(obs)+(goal?('\ngoal from the human: '+goal):'')+'\nReply with exactly ONE verb call.';
+  msgs.push({role:'user',content:u});
+  let raw='', latency=0;
+  try{
+    const t0=Date.now(); const ctrl=new AbortController(); const killer=setTimeout(()=>ctrl.abort(),60000);
+    const r=await fetch(base+'/chat/completions',{method:'POST',signal:ctrl.signal,headers:{'content-type':'application/json',...XHDR},
+      body:JSON.stringify({model:$('msel').value,messages:msgs,max_tokens:120,temperature:0.6,stream:false})});
+    clearTimeout(killer); latency=Date.now()-t0;
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d=await r.json(); raw=(d&&d.choices&&d.choices[0]&&d.choices[0].message&&d.choices[0].message.content)||'';
+  }catch(e){ trace('endpoint error: '+e.message+' — retrying in 5s','err'); loopBusy=false; if(running) setTimeout(loop,5000); return; }
+  if(!running||gen!==loopGen){ loopBusy=false; trace('reply discarded — STOP landed while the model was thinking','mv'); return; }   // the in-flight reply must not reach the body
+  trace('model ('+latency+'ms): '+raw.slice(0,160),'raw');
+  // salvage ONE verb line out of whatever came back (fences, prose, thinking tags)
+  const cleaned=raw.replace(/<think>[\s\S]*?<\/think>/gi,'').replace(/```[a-z]*|```/gi,'').trim();
+  const m=cleaned.match(/[a-zA-Z_][a-zA-Z0-9_]*\s*\([^)]*\)/);
+  const actionText=m?m[0]:cleaned.split('\n')[0];
+  const ack=await gate.execute(actionText,{gen:sg});   // a STOP after the model started thinking makes this an OLD command: the gateway refuses it
+  trace('ack: '+(ack.ok?(ack.note||'ok'):('✗ '+ack.error)), ack.ok?'mv':'err');
+  hist.push({u:u, a:actionText+'  // result: '+(ack.ok?(ack.note||'ok'):ack.error)});
+  if(hist.length>6) hist=hist.slice(-6);
+  loopBusy=false;
+  if(running) setTimeout(loop,1200);   // execute() already waited out the motion — small gap, then observe again
+}
+
+// ── wiring ──
+$('stop').onclick=()=>{ stopLoop(); if(gate){ if(gate.halt) gate.halt('operator'); else gate.stopMotion(); } trace('STOP — loop halted, legs limp','mv'); };
+function connect(){ stopLoop(); const id=($('id').value.trim()||'bench'); try{ localStorage.gb_walk_id=id; }catch(e){} boot(id); }   // changing the robot mid-drive stops the drive first
+$('id').addEventListener('change',connect);
+$('id').value = qp.get('id') || (function(){ try{ return localStorage.gb_walk_id; }catch(e){ return ''; } })() || 'bench';
+$('start').addEventListener('click',()=>{ $('start').style.display='none'; $('ui').style.display='flex';
+  requestMotion();
+  try{ if(window.speechSynthesis){ const uu=new SpeechSynthesisUtterance(' '); uu.volume=0; speechSynthesis.speak(uu); } }catch(e){}   // unlock iOS TTS inside the tap
+  paintMode(); connect();
+  trace('custom agent surface awake — leave the field empty for an inbound agent, or paste an OpenAI-compatible URL','net');
+});
+</script></body></html>

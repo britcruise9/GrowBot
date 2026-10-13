@@ -1,0 +1,329 @@
+<!DOCTYPE html><html><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Face Track · GrowBot</title><style>
+:root{color-scheme:dark;--bg:#05070d;--panel:#0e1622;--line:rgba(120,160,200,.25);--text:#e8f6ff;--mut:#7f93ab;--teal:#37e0c8;--red:#ff6b81}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:system-ui;touch-action:none;-webkit-user-select:none}
+.wrap{overflow-y:auto;display:flex;flex-direction:column;height:100%;padding:8px;box-sizing:border-box;gap:7px}
+.top{display:flex;gap:6px;align-items:center}
+#id{flex:1;min-width:0;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:9px;font-size:13px}
+.dot{width:11px;height:11px;border-radius:50%;background:#445;flex:0 0 auto}.dot.on{background:var(--teal);box-shadow:0 0 8px var(--teal)}
+button{font-size:14px;padding:11px 8px;background:#101826;color:#dfe8f3;border:1px solid #2a3a4d;border-radius:8px;font-weight:600}
+#stop{color:var(--red)}
+label.sw{font-size:12px;color:var(--mut);display:flex;align-items:center;gap:5px;white-space:nowrap}
+.stage{flex:1;position:relative;background:#000;border:1px solid var(--line);border-radius:12px;overflow:hidden;min-height:200px}
+#vid{position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;object-fit:contain;transform:scaleX(-1)}
+#ov{position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%}
+#st{font-size:12px;color:var(--teal);text-align:center;min-height:1.1em}
+.sl{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--mut)}.sl span{width:74px}.sl input{flex:1}.sl b{width:32px;text-align:right;color:var(--text);font-variant-numeric:tabular-nums}
+.r{display:flex;gap:6px}.r>button{flex:1}
+#start{position:fixed;top:0;left:0;right:0;bottom:0;margin:auto;width:84%;height:30%;font-size:22px;border-radius:22px}
+small{color:#566;font-size:10px}
+#trace{height:34px;background:#070b12;border:1px solid var(--line);border-radius:10px;padding:6px 8px;font:11px/1.4 ui-monospace,monospace;color:#9fb6cf;overflow:auto;white-space:pre-wrap}
+</style></head><body>
+<button id=start>TAP TO START<br><small>front camera · legs follow automatically · STOP stays stopped</small></button>
+<section id=setup style="display:none;position:fixed;inset:0;z-index:5;padding:24px;box-sizing:border-box;overflow-y:auto;background:var(--bg)">
+  <h2>Use the Combined setup</h2>
+  <p>For the same robot you already tested with Combined, with its leg connections and phone mounting unchanged.</p>
+  <label for=setupId>Robot pairing code</label>
+  <input id=setupId autocomplete=off spellcheck=false style="display:block;box-sizing:border-box;width:100%;margin:8px 0 18px;padding:12px;background:var(--panel);color:var(--text);border:1px solid var(--line)">
+  <label style="display:flex;gap:10px;align-items:flex-start"><input id=setupConfirm type=checkbox> I already tested Combined on this robot, and its setup is unchanged.</label>
+  <p id=setupMessage role=status style="color:var(--teal)"></p>
+  <div class=r><button id=setupUse disabled>Use Combined</button><button id=setupOriginal>Keep Original</button></div>
+  <p style="color:var(--mut);font-size:13px">Remembered for this robot in this browser. Walking and other settings stay unchanged. The camera and legs start only when you tap Start.</p>
+</section>
+
+<div class=wrap style=display:none id=ui>
+  <div class=top><span class=dot id=dot></span><input id=id placeholder="pairing code (e.g. gb-xxxxxx)"><label class=sw><input type=checkbox id=follow> legs follow</label></div>
+  <div id=ladface style="display:none;font-size:12px;color:var(--mut)">Show one face. Briefly lost? I hold my pose and wait for you to return. STOP stays stopped.</div>
+  <div id=verticalNote style="display:none;font-size:12px;color:var(--mut)">Combined · verified calibration. <label class=sw><input type=checkbox id=verticalOnly> Up/down only (left/right paused)</label></div>
+  <div id=holdStatus style="font-size:12px;color:var(--teal)">Not following</div>
+  <div id=timing style="font-size:11px;color:var(--mut)">Measuring camera processing → command. Relay and motor delay are not measured.</div><div class=stage><video id=vid playsinline muted autoplay></video><canvas id=ov></canvas></div>
+  <div id=st>starting…</div>
+  <div id=drive style="font-size:11px;color:var(--mut);text-align:center">No movement requested</div>
+  <button id=stop>STOP</button>
+  <div class=sl><span>follow mode</span><select id=mode style="flex:1;min-width:0;background:var(--panel);color:var(--text);padding:5px"><option value=quiet>Quiet company</option><option value=conversation selected>Conversational</option><option value=engaged>Engaged</option><option value=custom disabled>Custom</option></select></div>
+  <div class=sl><span>movement</span><select id=controller style="flex:1;min-width:0;background:var(--panel);color:var(--text);padding:5px"><option value=combined>Combined · sideways assist</option><option value=original>Original · comparison</option></select></div>
+  <details id=advanced><summary style="font-size:12px;color:var(--mut)">Advanced</summary>
+  <div class=sl><span>center hold</span><select id=holdMode><option value=zone selected>75% box coverage</option><option value=current>Previous · precise center</option></select></div>
+  <div class=sl><span>sensitivity</span><input type=range id=gain min=10 max=100 value=60><b id=gv>60</b></div>
+  <div class=sl><span>speed °/s</span><input type=range id=speed min=60 max=360 step=30 value=60><b id=sv>60</b></div>
+  <div style="font-size:10px;color:var(--mut)">Tested gaze range · sideways reach depends on stance</div>
+  <button id=flip>flip ⟷ direction</button>
+  </details>
+  <div id=trace></div>
+</div>
+
+<script type="module">
+import { RelayBody } from '/relay-transport.js';
+import {HoldZone} from './face-evidence/hold-zone.mjs';
+import {CombinedGaze,COMBINED_PROFILE,decodePose,encodePose,leanLimit} from './face-evidence/combined-gaze.mjs';
+import {readProfile,profileMatches as savedProfileMatches,readFaceWiring,readFaceSelection,selectFaceSetup,faceSelectionMatches} from './face-evidence/profile.mjs';
+import {StanceGuard,BENCH_GAZE} from './face-evidence/stance-guard.mjs';
+const $=id=>document.getElementById(id);
+const qp=new URLSearchParams(location.search);
+function entryRobot(){
+  // An explicit empty id means no robot. A saved Face choice is a fallback
+  // only when neither the URL nor the normal pairing names a robot.
+  if(qp.has('id'))return(qp.get('id')||'').trim();
+  const paired=(localStorage.gb_walk_id||'').trim();if(paired)return paired;
+  try{const choice=JSON.parse(localStorage.getItem('gb_face_profile'));return readFaceSelection(localStorage,choice&&choice.bodyId).supported?choice.bodyId:'';}catch(_){return '';}
+}
+const entryId=entryRobot();
+let initialProfile=readFaceSelection(localStorage,entryId);
+if(!initialProfile.supported)initialProfile=readProfile(localStorage);
+function showSetup(id){
+  $('start').disabled=true;$('start').style.display='none';$('setup').style.display='block';
+  $('setupId').value=id;$('setupConfirm').checked=false;paintSetup();
+}
+function paintSetup(){
+  const wiring=readFaceWiring(localStorage),id=$('setupId').value.trim();
+  $('setupUse').disabled=!wiring.supported||!id||!$('setupConfirm').checked;
+  $('setupMessage').textContent=wiring.supported?(id?'':'Enter this robot’s pairing code.'):wiring.reason;
+}
+function faceURL(file,id){const url=new URL(file,location.href);url.search=location.search;url.searchParams.delete('setup');url.searchParams.set('id',id);return url;}
+$('setupConfirm').addEventListener('change',paintSetup);$('setupId').addEventListener('input',paintSetup);
+$('setupUse').onclick=()=>{
+  const id=$('setupId').value.trim(),chosen=selectFaceSetup(localStorage,id,$('setupConfirm').checked);
+  if(!chosen.supported){$('setupMessage').textContent=chosen.reason;return;}
+  location.replace(faceURL('./face.html',id).href);
+};
+$('setupOriginal').onclick=()=>{disarm('Opening Original — legs released');location.replace(faceURL('./face-original.html',$('setupId').value.trim()).href);};
+if(!initialProfile.supported){
+  $('start').disabled=true;
+  if(qp.get('setup')==='combined')showSetup(entryId);
+  else{const fallback=new URL('./face-original.html',location.href);fallback.search=location.search;location.replace(fallback.href);}
+}
+function profileMatches(){
+  if(initialProfile.source==='face')return faceSelectionMatches(localStorage,initialProfile,$('id').value)&&(!body||body.id===initialProfile.bodyId);
+  return initialProfile.supported&&savedProfileMatches(localStorage,initialProfile.signature);
+}
+const tEl=$('trace'); function trace(s){ const d=document.createElement('div'); d.textContent='> '+s; tEl.appendChild(d); while(tEl.childElementCount>60)tEl.removeChild(tEl.firstChild); tEl.scrollTop=tEl.scrollHeight; }
+try{ if((localStorage.gb_ui_mode||'simple')!=='expert') $('ladface').style.display='block'; }catch(e){}   // SIMPLE-mode banner (0715): this tab is an optional stop on the numbered path
+
+// ── relay (shared transport) — face demo drives the WALK lane just like the other remotes ──
+let body=null,armed=false,wantFollow=false,armEpoch=0,lastFrame=-Infinity,seenSince=null,centerSince=null;
+// Explicit local H1/H2 profile. These are absolute pre-swap wire targets, not
+// generic body directions. Shared transport still owns SWAP exactly once.
+const verticalTest=true; // Combined is entered only for the verified saved profile above.
+const stanceGuard=new StanceGuard();
+const combined=new CombinedGaze();
+const holdZone=new HoldZone();let faceBox=null;
+let lastPose=[90,90],hasPose=false,lossAt=null,searching=false,losses=[],verticalBias=0,xAim=0,faceSize=0,lastDrive=0,activeAxis='horizontal';
+let trackingStatus='',atLimit=false,recoveryLatched=false,trackingBegan=null,speed=60;
+let inferenceMs=0,timingSamples=[],lastTimingPaint=0;
+const HOLD_MS=950,REACQUIRE_MS=250,REPEATED_REACQUIRE_MS=600;
+function releaseTracking(){holdZone.reset();faceBox=null;$('holdStatus').textContent='Not following';stanceGuard.reset();combined.reset();armed=false;trackingBegan=null;armEpoch++;seenSince=centerSince=null;target=targetY=smooth=0;lastFace=-Infinity;lossAt=null;searching=false;hasPose=false;atLimit=false;recoveryLatched=false;trackingStatus='';$('drive').textContent='No movement requested';if(body)try{body.stop();}catch(e){}}
+function disarm(reason){wantFollow=false;$('follow').checked=false;releaseTracking();$('st').textContent=reason;trace(reason);}
+function pauseFace(reason){holdZone.reset();faceBox=null;$('holdStatus').textContent='Face unavailable · holding last pose';
+  const now=performance.now();stanceGuard.reset();combined.reset();armed=false;trackingBegan=null;seenSince=centerSince=null;
+  if(hasPose&&lossAt===null&&!searching){
+    lossAt=now;losses=losses.filter(t=>now-t<8000);losses.push(now);
+    trace('Face lost — holding the last pose until a steady face returns');
+    // Repeated losses require a longer steady observation before restarting.
+    // Face absence never commands a blind return or disables following.
+    // Camera/body revocation and explicit Stop still release immediately.
+    if(losses.length>=3){recoveryLatched=true;trace('Repeated face loss — waiting for a steadier face');}
+  }
+  $('st').textContent=hasPose?(lossAt!==null&&now-lossAt<HOLD_MS?'Briefly lost — holding':'Waiting here — show your face'):reason;
+}
+function cameraFresh(now){return !document.hidden&&video.readyState>=2&&!video.paused&&video.srcObject?.getVideoTracks()[0]?.readyState==='live'&&now-lastFrame<400;}
+function requestFollow(){
+  if(!profileMatches()){disarm('Calibration changed. Reload to select the right Face mode.');return;}
+  releaseTracking();losses=[];lastPose=[90,90];verticalBias=xAim=0;lastDrive=performance.now();wantFollow=true;$('follow').checked=true;$('st').textContent='Waiting for camera, body and one steady face';
+}
+function followRate(now){
+  // Requested angle speed, not measured shaft speed. Each acquisition gets
+  // 500ms at 12 degrees/s, then a 100ms ramp. Close faces do not impose a
+  // hidden permanent slowdown. The user controls the established speed.
+  const age=trackingBegan===null?0:now-trackingBegan;
+  const ramp=Math.max(0,Math.min(1,(age-500)/100));
+  return 12+(speed-12)*ramp;
+}
+function correctionStrength(error){
+  return Math.sign(error)*Math.min(1,Math.max(0,(Math.abs(error)-.055)/.185))*gain;
+}
+function paintTiming(sentAt){
+  // Starts immediately before inference, not camera exposure; ends at pose().
+  const age=Math.max(0,sentAt-lastFace);
+  timingSamples.push(age);if(timingSamples.length>90)timingSamples.shift();
+  if(sentAt-lastTimingPaint<500)return;lastTimingPaint=sentAt;
+  const sorted=timingSamples.slice().sort((a,b)=>a-b);
+  const median=sorted[Math.floor(sorted.length/2)],p95=sorted[Math.min(sorted.length-1,Math.floor(sorted.length*.95))];
+  $('timing').textContent='Processing → command: '+Math.round(median)+' ms typical / '+Math.round(p95)+' ms p95 · detector '+Math.round(inferenceMs)+' ms. Excludes camera exposure, relay and motors.';
+}
+function wirePose(pair){
+  if(!profileMatches()){disarm('Face setup changed — follow stopped');return false;}
+  body.pose(pair[0],pair[1]);return true;
+}
+function sendPose(goal,now,hold=false,settling=false){
+  const dt=Math.min(.1,Math.max(0,(now-lastDrive)/1000));lastDrive=now;
+  if(hold||settling)stanceGuard.reset();combined.reset();
+  // Bound requested angle changes; actual joint speed is not measured here.
+  const maxStep=(settling?12:followRate(now))*dt;
+  const next=hold?lastPose.slice():goal.map((v,i)=>lastPose[i]+Math.max(-maxStep,Math.min(maxStep,v-lastPose[i])));
+  lastPose=next;hasPose=true;if(!wirePose(next))return;
+  if(!hold&&!settling)paintTiming(performance.now());
+  $('drive').textContent=(hold?'Holding':settling?'Returning to rest':activeAxis==='vertical'?'Up/down request':'Left/right request')+
+    ' · legs '+Math.round(next[0])+'° / '+Math.round(next[1])+'°'+
+    (!hold&&!settling?' · goal '+Math.round(goal[0])+'° / '+Math.round(goal[1])+'°':'');
+}
+$('follow').onchange=()=>{if(!$('follow').checked)disarm('Follow off — legs released');else requestFollow();};
+addEventListener('pagehide',()=>{disarm('Page closed — follow stopped');});document.addEventListener('visibilitychange',()=>{if(document.hidden){disarm('Page hidden — follow stopped');}});
+function makeBody(id){disarm('Body connection changed — enable follow when ready');if(body)body.close();body=null;if(!id){$('st').textContent='Enter your robot’s pairing code';return;}let wasOnline=false;const next=new RelayBody(id,{onStatus:a=>{if(body!==next)return;if(!a&&wasOnline)disarm('Body offline — enable follow after reconnecting');if(a)wasOnline=true;$('dot').className='dot'+(a?' on':'');trace(a?'body online':'body offline');}});body=next;body.connect();}
+$('id').value=entryId;
+$('id').addEventListener('input',()=>{if(initialProfile.source==='face'&&$('id').value.trim()!==initialProfile.bodyId)disarm('Robot changed — choose its Face setup first');});
+$('id').addEventListener('change',()=>{const firstPair=!body&&wantFollow;const id=$('id').value.trim();if(initialProfile.source==='face'&&!faceSelectionMatches(localStorage,initialProfile,id)){disarm('Robot changed — choose its Face setup first');if(body)body.close();body=null;showSetup(id);return;}if(id)localStorage.gb_walk_id=id;makeBody(id);if(firstPair&&body)requestFollow();});
+if(initialProfile.source==='face')$('verticalNote').firstChild.textContent='Combined · your confirmed setup. ';
+
+const video=$('vid'), ov=$('ov'), ctx=ov.getContext('2d');
+let detector=null, dir=1, gain=0.6, smooth=0, target=0, lastFace=0, sendT=0, lastVT=-1, targetY=0,lastTick=0;
+if(verticalTest){$('verticalNote').style.display='block';$('verticalOnly').checked=qp.get('axis')==='vertical';}
+$('controller').onchange=()=>{holdZone.reset();$('holdStatus').textContent=$('controller').value==='original'?'Coverage hold applies to Combined only':'Waiting for next face observation';stanceGuard.reset();combined.reset();lastDrive=performance.now();trackingBegan=armed?lastDrive:null;trace('Controller: '+$('controller').value+' · mode unchanged');};
+$('holdMode').onchange=()=>{holdZone.reset();combined.reset();smooth=target;$('holdStatus').textContent=wantFollow?'Waiting for next face observation':'Not following';};
+$('verticalOnly').onchange=()=>{holdZone.reset();$('holdStatus').textContent='Waiting for next face observation';combined.reset();};
+try{ dir=(+localStorage.gb_face_dir===-1)?-1:1; }catch(e){}   // remember the flip per device (field 0722: servo mounting varies per build — "goes down when I go right" = un-flipped dir, and the choice was forgotten every reload)
+
+async function start(){
+  if(!profileMatches()){disarm('Calibration changed. Reload to select the right Face mode.');return;}
+  const startEpoch=armEpoch;
+  $('start').style.display='none';$('ui').style.display='flex';
+  // 1. front camera
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'user', width:{ideal:640}, height:{ideal:480} }, audio:false });
+    video.srcObject=stream; await video.play(); trace('camera on');
+  }catch(e){ $('st').textContent='camera blocked: '+e.message; trace('camera error: '+e.message); return; }
+  // 2. face model (MediaPipe BlazeFace, loaded from CDN; dynamic import so a CDN miss doesn't kill the page)
+  $('st').textContent='loading face model…';
+  try{
+    const V='https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18';
+    const { FaceDetector, FilesetResolver } = await import(V+'/vision_bundle.mjs');
+    const fileset = await FilesetResolver.forVisionTasks(V+'/wasm');
+    detector = await FaceDetector.createFromOptions(fileset, {
+      baseOptions:{ modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite', delegate:'GPU' },
+      runningMode:'VIDEO', minDetectionConfidence:0.5 });
+
+    trace('face model ready · Combined gaze'); $('st').textContent='show your face';
+  }catch(e){ $('st').textContent='face model failed to load: '+e.message; trace('model error: '+e.message); return; }
+  if(!profileMatches()){disarm('Face setup changed while starting — choose its setup again');return;}
+  const allowAuto=armEpoch===startEpoch;
+  makeBody($('id').value.trim());
+  if(allowAuto)requestFollow();
+  requestAnimationFrame(loop);
+}
+$('start').addEventListener('click', start);
+$('gain').addEventListener('input',()=>{ $('mode').value='custom';gain=+$('gain').value/100; $('gv').textContent=$('gain').value; });
+$('speed').addEventListener('input',()=>{$('mode').value='custom';speed=Math.max(60,Math.min(360,+$('speed').value||180));$('sv').textContent=String(speed);});
+$('mode').onchange=()=>{holdZone.reset();$('holdStatus').textContent='Waiting for next face observation';const preset={quiet:[10,60],conversation:[60,60],engaged:[39,120]}[$('mode').value];if(!preset)return;[gain,speed]=[preset[0]/100,preset[1]];$('gain').value=$('gv').textContent=String(preset[0]);$('speed').value=$('sv').textContent=String(speed);stanceGuard.reset();combined.reset();};
+$('flip').onclick=()=>{ dir*=-1; try{ localStorage.gb_face_dir=dir; }catch(e){} trace('direction flipped (dir='+dir+') — saved for this device'); };
+$('stop').onclick=()=>{disarm('STOP — legs released. Enable legs follow to start again.');};
+
+// Exact previous axis-selection/control block from face-steady (28240ac).
+// Enter only with zero lean so Original receives its original paired coordinates.
+function driveOriginal(now,driveDt){
+      const lo=verticalTest?BENCH_GAZE.min-90:-90,hi=verticalTest?BENCH_GAZE.max-90:90;
+      const yError=Math.abs(targetY)>.055,xError=Math.abs(target)>.055;
+      // These movements share an opposed servo pair, not independent yaw and
+      // pitch axes. A 25% preference margin stops near-equal errors flickering.
+      const preferY=verticalTest&&yError&&($('verticalOnly').checked||!xError||
+        Math.abs(targetY)>Math.abs(target)*(activeAxis==='vertical'?.8:1.25));
+      let error=0;
+      if(preferY){activeAxis='vertical';error=targetY;}
+      else if(!verticalTest||!$('verticalOnly').checked){activeAxis='horizontal';if(xError)error=smooth*dir;}
+      // Integrate only the current image error from the last requested pose.
+      // Centre holds; reversal discards the old direction immediately.
+      const correction=followRate(now)*correctionStrength(error)*driveDt;
+      xAim=verticalBias=verticalTest?stanceGuard.step(lastPose[0],-followRate(now)*correctionStrength(error),driveDt)-90:Math.max(lo,Math.min(hi,lastPose[0]-90-correction));
+      const off=Math.max(lo,Math.min(hi,xAim));
+      sendPose([90+off,90-off],now);
+      // A distant clamped goal is not a reached limit. Keep this verdict between
+      // command ticks so faster camera frames cannot overwrite it with Following.
+      atLimit=verticalTest?(Math.abs(error)>.055&&stanceGuard.edgeScale<.08):(xError||yError)&&((off===lo&&lastPose[0]-90<=lo+.01)||(off===hi&&lastPose[0]-90>=hi-.01));
+}
+function loop(){
+  let now=performance.now();const dt=Math.min(.1,Math.max(0,(now-lastTick)/1000));lastTick=now;
+  if(wantFollow&&(hasPose||seenSince!==null)&&!cameraFresh(now)){
+    if(hasPose)disarm('Camera unavailable — enable follow when ready');else pauseFace('Waiting for fresh camera frames');
+  }
+  if(detector&&video.readyState>=2&&video.currentTime!==lastVT){
+    lastVT=video.currentTime;lastFrame=now;
+    let result=null;
+    try{result=detector.detectForVideo(video,now);inferenceMs=performance.now()-now;}catch(e){disarm('Detector failed — enable follow after retrying');}
+    if(result!==null){
+
+    const detections=result?.detections||[],observedAt=result?.observedAt??now;
+    ov.width=ov.clientWidth;ov.height=ov.clientHeight;ctx.clearRect(0,0,ov.width,ov.height);
+    const vw=video.videoWidth||640,vh=video.videoHeight||480;
+    // Full uncropped camera coordinates, matching object-fit:contain and mirroring.
+    const scale=Math.min(ov.width/vw,ov.height/vh),ox=(ov.width-vw*scale)/2,oy=(ov.height-vh*scale)/2;
+    ctx.strokeStyle='rgba(127,147,171,.6)';ctx.lineWidth=1;
+    const zone=$('holdMode').value==='zone'&&$('controller').value==='combined';
+    const inner=zone?.08:.055;ctx.strokeStyle=zone?'#37e0c8':'#ffffff';
+    ctx.strokeRect(ox+vw*(.5-inner)*scale,oy+vh*(.5-inner)*scale,vw*inner*2*scale,vh*inner*2*scale);
+    if(detections.length===1){
+      const bb=detections[0]?.boundingBox||{};
+      const nx=(bb.originX+bb.width/2)/vw-.5,ny=(bb.originY+bb.height/2)/vh-.5;
+      if(Number.isFinite(nx)&&Number.isFinite(ny)&&Math.abs(nx)<=.5&&Math.abs(ny)<=.5){
+        if(nx*smooth<=0)smooth=nx;
+        ctx.fillStyle='#f3c969';ctx.fillRect(ox+(1-(nx+.5))*vw*scale-3,oy+(ny+.5)*vh*scale-3,6,6);
+        faceBox={x:bb.originX/vw,y:bb.originY/vh,width:bb.width/vw,height:bb.height/vh};
+        target=nx;targetY=ny;lastFace=observedAt;faceSize=Math.max(bb.width/vw,bb.height/vh);
+        ctx.strokeStyle='#37e0c8';ctx.lineWidth=3;
+        ctx.strokeRect(ox+(vw-bb.originX-bb.width)*scale,oy+bb.originY*scale,bb.width*scale,bb.height*scale);
+        if(wantFollow&&cameraFresh(now)&&body?.ready&&body.awake){
+          if(seenSince===null)seenSince=now;
+          if(!armed&&now-seenSince>=(recoveryLatched?REPEATED_REACQUIRE_MS:REACQUIRE_MS)){
+            // Resume from the pose being refreshed now, never a pre-loss goal.
+            xAim=verticalBias=lastPose[0]-90;smooth=target;
+            armed=true;trackingBegan=now;lossAt=null;searching=false;
+            if(recoveryLatched){recoveryLatched=false;losses=[];}
+          }
+          const both=Math.abs(nx)<=.055&&Math.abs(ny)<=.055;
+          if(!both)centerSince=null;else if(centerSince===null)centerSince=now;
+          trackingStatus=both&&now-centerSince>=2000?'Centered · both axes':'Following · left/right '+nx.toFixed(2)+' · up/down '+ny.toFixed(2)+(activeAxis==='combined'?' · coordinated height + lean':' · adjusting up/down');
+          if(!armed)$('st').textContent=hasPose?'Face found — holding steady':'Face found — getting ready';
+        }
+      }else if(wantFollow)pauseFace('Waiting for a valid face');
+    }else if(wantFollow)pauseFace(detections.length>1?'Show one face — waiting':'Face lost — waiting to follow again');
+    }
+  }
+  now=performance.now();
+  smooth+=(target-smooth)*(1-Math.exp(-dt/0.02));
+  if(wantFollow&&!profileMatches())disarm('Calibration changed — follow stopped');
+  if(hasPose&&(!cameraFresh(now)||!body?.ready||!body.awake))disarm('Camera or body unavailable — enable follow when ready');
+  if(seenSince!==null&&now-lastFace>=400){pauseFace('Face lost — waiting to follow again');ctx.clearRect(0,0,ov.width,ov.height);}
+  if(wantFollow&&cameraFresh(now)&&body?.ready&&body.awake&&now-sendT>=33){
+    sendT=now;
+    if(armed&&now-lastFace<400){
+      const driveDt=Math.min(.1,Math.max(0,(now-lastDrive)/1000));
+      if($('controller').value==='original'){
+        const current=decodePose(lastPose);
+        if(Math.abs(current.b)>1e-7){
+          const b=current.b-Math.sign(current.b)*Math.min(Math.abs(current.b),12*driveDt/.99);
+          lastPose=encodePose(current.h,b);lastDrive=now;hasPose=true;
+          if(wirePose(lastPose)){activeAxis='handoff';atLimit=false;$('drive').textContent='Easing lean back for Original comparison';}
+        }else driveOriginal(now,driveDt);
+      }else{
+      activeAxis=$('verticalOnly').checked?'vertical':'combined';
+      const pose=decodePose(lastPose),supported=pose.h>=-12&&pose.h<=60&&Math.abs(pose.b)<=leanLimit(pose.h)+1e-8;
+      const wasHolding=holdZone.holding;
+      const holding=$('holdMode').value==='zone'&&holdZone.step(faceBox,{supported});
+      if(holding!==wasHolding){combined.reset();smooth=target;}
+      const next=combined.step(lastPose,holding?0:smooth,holding?0:targetY,driveDt,{rate:followRate(now),gain,verticalOnly:$('verticalOnly').checked,dir});
+      $('holdStatus').textContent=$('holdMode').value==='zone'?(holding?'HOLDING · resumes below 50% target coverage':'FOLLOWING · holds at 75% target coverage'):'Current center rule';
+      if($('holdMode').value==='zone')$('holdStatus').textContent+=' · '+Math.round(holdZone.coverage*100)+'%';
+      lastDrive=now;lastPose=next;hasPose=true;
+      if(wirePose(next)){paintTiming(performance.now());$('drive').textContent='Height '+combined.state.h.toFixed(1)+' · lean '+combined.state.b.toFixed(1);atLimit=combined.state.limited||combined.state.heightLimited;}
+      }
+    }else if(hasPose&&lossAt!==null){
+      // Refresh the WALK lease at exactly the last request. Face absence is
+      // not evidence that neutral is a supported resting pose on this body.
+      // Hold through qualification; move again only after a steady face returns.
+      sendPose(lastPose,now,true);
+    }
+  }
+  if(wantFollow&&!armed&&hasPose&&lossAt!==null)$('st').textContent=seenSince!==null&&now-lastFace<400?'Face found — holding steady':now-lossAt<HOLD_MS?'Briefly lost — holding':'Waiting here — show your face';
+  if(wantFollow&&armed&&now-lastFace<400)$('st').textContent=activeAxis==='handoff'?'Switching to Original — easing lean back':atLimit?'At this stance’s gaze reach — holding the limited direction':trackingStatus;
+  requestAnimationFrame(loop);
+}
+</script></body></html>

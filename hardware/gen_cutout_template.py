@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-# Generates vercel-app/cutout-template.html
+# Generates cutout-template.html next to this script.
 # Minimal cut template: a scale-check box, the base plate, and the two legs. Nothing else.
 # Authored entirely in mm (SVG viewBox user-unit = 1mm) so it prints at true 1:1.
 
-OUT = "/Users/brit/Desktop/phone-body/vercel-app/cutout-template.html"
+import os
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cutout-template.html")  # was a local absolute path
 
 W, H = 180.0, 214.0
 L = 8.0

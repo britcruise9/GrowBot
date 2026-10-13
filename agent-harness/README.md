@@ -72,10 +72,10 @@ State persists in `memory.json` between runs — the creature you talk to tomorr
 
 Replace one function — `actuate()` in the reference loop — with your transport, and write a `body_truth` for your rig (SPEC-BODY-TRUTH §6 first: channel table, boot-limp, per-device calibration layered on top, and the power-budget math if you're past ~4 servos). One honest caveat before you wire it up: the phone actuator is open-loop (spoken intent, cooperative human); motors close the loop. The interface survives the swap; the control problem doesn't — re-validate behavior once your verbs actually change what the sensors see.
 
-Out of scope here, by design: the sensing side (the mirror spec: sensor channels → felt magnitudes, "senses are felt, not reported"), the reflex tier, the energy economy, onboarding, the loadable-personality ("soul") format and its gallery, and the relay/firmware protocol for the shipped 2-leg body. The kit is the mind and the body contract; ask if you need the rest.
+Out of scope here, by design: the sensing side (the mirror spec: sensor channels → felt magnitudes, "senses are felt, not reported"), the reflex tier, the energy economy, onboarding, the loadable-personality ("soul") format and its gallery, and the relay/firmware protocol for the shipped 2-leg body. That one is at [growbot.dev/body-docs.html](https://growbot.dev/body-docs.html), and [growbot.dev/agent-docs.html](https://growbot.dev/agent-docs.html) shows how your own agent drives a real GrowBot through the app. The kit is the mind and the body contract; ask if you need the rest.
 
 ## Contact & license
 
-Questions, ports, or a body you want the creature to drive: **info@growbot.dev** · [growbot.dev](https://growbot.dev)
+Questions, ports, or a body you want the creature to drive: the [GrowBot Discord](https://discord.gg/wCnAVaH4zR) · **info@growbot.dev** · [growbot.dev](https://growbot.dev)
 
 Code: PolyForm Noncommercial 1.0.0 · Docs: CC BY-NC 4.0 — see [LICENSE.md](LICENSE.md).

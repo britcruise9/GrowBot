@@ -31,7 +31,14 @@ I2C_ID     = 0               # Kitronik Robotics board: I2C0 ...
 SDA_PIN    = 8               # ... SDA on GP8 ...
 SCL_PIN    = 9               # ... SCL on GP9
 CHIP_ADDRS = (0x6C, 0x40)    # Kitronik = 0x6C, generic PCA9685 = 0x40
-GPIO_PINS  = {1: 0, 3: 1}    # direct-wire: port 1 -> GP0 (left), port 3 -> GP1 (right)
+
+# Direct-wire pin map: port 1 = left, port 3 = right.
+# The default suits the Waveshare (socket number = GPIO number) and a bare Pico.
+# A board with no servo chip but different wiring needs its own map:
+#   Kitronik Simply Robotics 5348 -> {1: 15, 3: 13}   (its servo sockets 0 and 2)
+#      Reported working by two builders, not bench-checked here. That board has
+#      no PCA9685, so auto-detect already lands on this path; only the pins differ.
+GPIO_PINS  = {1: 0, 3: 1}
 
 
 # ---- I2C / PCA9685 driver (carrier board) --- verbatim Kitronik logic ----
@@ -127,5 +134,6 @@ def KitronikPicoRobotics():
     if mode == "i2c":
         print("PicoRobotics: I2C servo board detected @", hex(addr))
         return _I2CBoard(addr)
-    print("PicoRobotics: no I2C chip -> direct-wire, GP0 = left, GP1 = right")
+    print("PicoRobotics: no I2C chip -> direct-wire, GP%d = left, GP%d = right"
+          % (GPIO_PINS[1], GPIO_PINS[3]))
     return _GPIOBoard()

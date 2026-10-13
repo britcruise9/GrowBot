@@ -9,3 +9,13 @@
 
 WIFI_SSID = "your-wifi-network-name"
 WIFI_PASSWORD = "your-wifi-password"
+
+# NEW (0830): your robot can know SEVERAL networks — home, phone hotspot, workshop.
+# It scans and joins the strongest one it recognizes. List them in order of preference:
+#
+# WIFI_NETWORKS = [
+#     ("home-wifi-name", "home-password"),
+#     ("my-phone-hotspot", "hotspot-password"),
+# ]
+#
+# (The single WIFI_SSID/WIFI_PASSWORD above still works and is tried too.)

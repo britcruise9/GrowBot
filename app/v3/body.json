@@ -1,0 +1,157 @@
+{
+ "v": 1,
+ "id": "growbot-85mm-2leg",
+ "name": "two-leg desk walker (85mm)",
+ "present": true,
+ "_note": "Body TRUTH the soul carries = PHONE truth only (what the phone needs to drive the body). Physical pin->servo mapping is CHIP FIRMWARE truth (relay_chip.py), NOT here. The phone sends intent over the shared relay wire as l,r (left,right leg degrees); the chip maps l/r to its own pins. If the live walk moonwalks/spins, that is a firmware servo-swap or sign flip \u2014 flag for a bench test, do NOT change this file. SIGNED OFF 2026-06-18.",
+ "_servos_note": "Two abstract channels. servo_1 = RIGHT leg (wire field r), servo_2 = LEFT leg (wire field l). No Pico pins here on purpose.",
+ "servos": [
+  {
+   "id": "servo_1",
+   "joint": "right leg",
+   "wire": "r",
+   "min": 0,
+   "max": 180,
+   "neutral": 90,
+   "band": [
+    0,
+    180
+   ]
+  },
+  {
+   "id": "servo_2",
+   "joint": "left leg",
+   "wire": "l",
+   "min": 0,
+   "max": 180,
+   "neutral": 90,
+   "band": [
+    0,
+    180
+   ]
+  }
+ ],
+ "walk": {
+  "policy": "policy_85mm.json",
+  "obs_size": 16,
+  "rate_hz": 30,
+  "_cal_note": "Physical per-device calibration, overridden by localStorage gb_walk_cal. Policy adapters use execution-local signs/gain and preserve device trims. The legacy policy field remains for older runners; directions below describe current agent routing.",
+  "cal": {
+   "L_SIGN": -1,
+   "R_SIGN": 1,
+   "L_OFF": 0,
+   "R_OFF": 0,
+   "IMU_SIGN": [
+    1,
+    -1,
+    1
+   ],
+   "gain": 1,
+   "turn": 0
+  },
+  "directions": {
+   "screen_forward": {
+    "gait": "screen_forward",
+    "policy": "/policies/forward-0930/walk_fwd.json",
+    "when": "stock body, SWAP off, valid trims, forwardwalk not 0; runtime capability is authoritative",
+    "gain": 0.99
+   },
+   "screen_backward": {
+    "gait": "screen_backward",
+    "policy": "/policy_drrma.json",
+    "command": "dir=back routes the unchanged legacy fwd policy"
+   },
+   "frame": "physical screen/body, independent of selected camera",
+   "evidence": "seven five-second runs on one stock kit; no distance or all-kit guarantee"
+  }
+ },
+ "geometry": {
+  "plate_mm": [
+   114,
+   69,
+   4.5
+  ],
+  "leg_mm": [
+   21,
+   13,
+   84
+  ],
+  "note": "flat paddle legs screwed to the horns; the servo sweep IS the motion, nothing hangs; 90 = upright"
+ },
+ "limits": {
+  "max_gesture_ms": 3000
+ },
+ "_gestures_note": "DEFAULT expressive pack (data). The brain still authors free gestures via body.steps {l,r,ms}; a soul may carry/override its own. The chip only PLAYS keyframes, never decides which exist.",
+ "gestures": {
+  "wiggle": [
+   {
+    "l": 60,
+    "r": 120,
+    "ms": 180
+   },
+   {
+    "l": 120,
+    "r": 60,
+    "ms": 180
+   },
+   {
+    "l": 60,
+    "r": 120,
+    "ms": 180
+   },
+   {
+    "l": 90,
+    "r": 90,
+    "ms": 220
+   }
+  ],
+  "bow": [
+   {
+    "l": 120,
+    "r": 60,
+    "ms": 520
+   },
+   {
+    "l": 90,
+    "r": 90,
+    "ms": 480
+   }
+  ],
+  "sway": [
+   {
+    "l": 72,
+    "r": 108,
+    "ms": 700
+   },
+   {
+    "l": 108,
+    "r": 72,
+    "ms": 700
+   },
+   {
+    "l": 90,
+    "r": 90,
+    "ms": 400
+   }
+  ]
+ },
+ "_limits_note": "0808 (Brit): the duty budget is OPT-IN now. Set duty_ms/duty_window_ms here only if a body needs torque rationing; absent, walks honor requested duration with stop, sensor, connection and tip/grab guards plus the chip dead-man.",
+ "spin": {
+  "normal": {
+   "right": "spin_right",
+   "left": "spin_left",
+   "policies": {
+    "cw": "/policies/normal-spin-1005/cw.json",
+    "ccw": "/policies/normal-spin-1005/ccw.json"
+   },
+   "when": "stock legs, SWAP off, valid trims and full gyro/gravity; normalspin=0 restores stock; runtime selection is authoritative"
+  },
+  "escape": {
+   "right": "spin_escape_right",
+   "left": "spin_escape_left",
+   "policy": "/policies/spin-v4-0911.json",
+   "when": "explicitly requested after observed lack of turning; no automatic stall detector"
+  },
+  "evidence": "R3 bench-tested on one stock kit across wood and carpets; CCW is slower and can travel on wood; no fixed-angle or all-kit guarantee"
+ }
+}

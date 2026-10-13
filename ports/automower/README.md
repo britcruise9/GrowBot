@@ -45,12 +45,13 @@ far more headroom than a mower drivetrain needs. Avoid the DRV8871 here: the
 voltage is fine at 45 V but its internal limit is about 3.6 A peak, which is likely
 undersized for wheel motors under load in wet grass.
 
-**2. The stock firmware lurches on every boot.** GrowBot's firmware runs an ~8 s
-"boot calibration" leg stretch on cold boot, so you can glue legs on straight.
+**2. The stock firmware lurches on every boot.** GrowBot's firmware runs a few seconds of
+"boot calibration" movement check on cold boot, so you can fit legs on straight.
 Look at what that actually is on wheels (`relay_chip.py`, `boot_calibration`):
-both wheels hard reverse for 260 ms, then hard forward, twice, before it has even
-joined WiFi. On a 10 kg machine that drives it off the dock. This driver holds the
-brake through that window (`BOOT_LOCKOUT_MS`, default 15 s) and swallows it.
+the right wheel runs one way then the other, twice, then the left wheel does the
+same, then both together, twice, all before it has even joined WiFi. On a 10 kg
+machine that drives it off the dock. This driver holds the brake through that
+window (`BOOT_LOCKOUT_MS`, default 15 s) and swallows it.
 
 ## Wiring
 
@@ -96,13 +97,15 @@ Do not skip this. It is a machine that can drive into a pond.
 1. **Wheels off the ground.** Mower up on blocks or a crate.
 2. Power on and wait out the 15 s boot lockout. Nothing should move at all. If a
    wheel twitches during that window, stop and check `BOOT_LOCKOUT_MS`.
-3. Pair the app, then drive forward in teleop. **Both wheels should turn the same
-   way.** If one runs backwards, flip that side's entry in `INVERT` at the top of
-   the file. If the whole thing goes backwards, flip both.
-4. Turn command: wheels should counter-rotate.
-5. Ask her to walk. Both wheels should roll forward with a slight waddle (that is
-   `GAIT_ROLL`, see below).
-6. Only then put it on the grass, somewhere flat and fenced, with the mower's own
+3. Pair it: enter your pairing code in the [tester](https://growbot.dev/tester/).
+   Then under Calibrate, slide Direct pose Left a little below 90 and Right a
+   little above 90. **Both wheels should roll forward**, because the stock
+   calibration mirrors the left side, like the legs. If one turns backward, flip
+   that side's entry in `INVERT` at the top of the file. If both do, flip both.
+4. Open [wheels mode](https://growbot.dev/v3/next.html?wheels=1) and pair it (see
+   What works, below). Drive a little, stop, then close the app mid-drive. **The
+   wheels must stop every time.**
+5. Only then put it on the grass, somewhere flat and fenced, with the mower's own
    STOP button in reach.
 
 ## Tuning (all at the top of the file)
@@ -130,46 +133,36 @@ forever. Each wheel runs its own timer, so they trip at different moments and ya
 the machine. Enable it only once you feed it something real. The IBT-2 brings out
 current-sense `IS` pins for exactly this.
 
-**`GAIT_ROLL = False`.** See the section below.
+**`GAIT_ROLL = False`.** Use wheels mode instead, see below.
 
 **The dead-man is software.** The sweep runs on an rp2 soft timer, which the
 MicroPython docs describe as prone to GC jitter and delays. It is not a hardware
 watchdog. Keep the mower's own STOP button reachable.
 
-## What works, and one thing that does not
+## What works
 
 Working today: teleop, gestures and routines, chat, voice, the senses, the whole
 personality. It is a real GrowBot that happens to be a lawnmower.
 
-The catch, stated plainly: **the autonomous walk lane streams mirrored leg angles**
-(`l = 90 - x`, `r = 90 + x`). Two servos read that as a gait. Two wheels read it as
-"spin one way, then the other", so a stock wheeled bot twitches on the spot and
-never travels. The ESP32 kit's README tells you to fix this by opening the app once
-with `?wheels=1`. **That mode is not live.** I checked the deployed app and the
-source: there is no wheels mode in either. Do not go hunting for it.
+**Use wheels mode for driving.** Open `growbot.dev/v3/next.html?wheels=1`, tap
+brain, then Settings, then Pair on the body row, and enter your pairing code.
+Bookmark the page after pairing. In wheels mode the brain drives instead of
+walking: a steady speed per side, then 90,90 to stop. It drives forward or pivots,
+with no reverse. Declare a band of `[50,130]` in your body settings and keep
+`MAX_DUTY` as your real ceiling. Details:
+[growbot.dev/body-docs.html](https://growbot.dev/body-docs.html).
 
-So this driver can fix it on the chip instead, with `GAIT_ROLL`. Each pose is split
-into throttle (both wheels together) and yaw (the difference). For teleop that split
-is an exact identity and changes nothing. When it sees a gait it converts how hard
-she is gaiting into forward roll and damps the yaw, so she waddles forward instead
-of twitching.
+Without wheels mode, the walk lane streams mirrored leg angles (`l = 90 - x`,
+`r = 90 + x`). Two servos read that as a gait. Two wheels read it as "spin one way,
+then the other", so the mower twitches on the spot and never travels.
 
-**It ships off, and you should understand why before you turn it on.** The
-firmware hands this driver only `servoWrite()` and `release()`. There is no mode
-bit, so nothing here can tell an autonomous gait from a human working the turn
-stick: both are a mirrored yaw oscillation with near-zero net throttle. Measured
-with it on, a ±25° teleop steering wiggle injected **+0.255 mean forward drive**,
-so the mower rolls off while you believe you are turning on the spot. It is also
-forward-only, because a mirrored stream carries no direction information, so an
-autonomous gait can only ever roll **toward** whatever is in front of it.
-
-Gating on zero-crossings does stop a *held* turn from being misread (that case is
-covered and tested), but a human wiggling a stick produces genuine oscillation and
-is simply indistinguishable. Turn `GAIT_ROLL = True` only for untended autonomous
-runs: blade removed, boundary wire live, and after you have watched it on blocks.
-For driving it around yourself, leave it off.
-
-The real fix is a mode bit from the app, which is a change on our side, not yours.
+**`GAIT_ROLL` is from before wheels mode existed. Leave it off.** It tried to fix
+that twitch on the chip by turning a gait into forward roll. The driver only gets
+`servoWrite()` and `release()`, with no mode bit, so it can't tell a gait from a
+human working the turn stick. Measured with it on, a ±25° teleop steering wiggle
+injected **+0.255 mean forward drive**, so the mower rolls off while you think you
+are turning on the spot. It can also only ever roll forward. Wheels mode is the
+mode bit it was missing.
 
 ## One question before you buy a driver
 

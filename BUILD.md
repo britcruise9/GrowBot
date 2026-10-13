@@ -1,45 +1,49 @@
-# Build the body (~30 min, no soldering, no code)
+# Build the body (about 30 minutes, no soldering)
 
-Give the creature a body: two servo legs, a Pico, a phone for a brain. Parts in [BOM.md](BOM.md). Prefer pictures and a checklist that talks back? The same guide is hosted at [growbot.dev/build](https://growbot.dev/build).
+The full guide, with photos, a USB installer and a checklist, is at [growbot.dev/build](https://growbot.dev/build). Use that if you can. This page is the same build in short, for doing it by hand. Parts are in [BOM.md](BOM.md).
 
-Using an ESP32 instead of a Pico? Follow [growbot.dev/build-esp32](https://growbot.dev/build-esp32), the steps below are Pico specific.
+Using an ESP32 instead of a Pico? Follow [growbot.dev/build-esp32](https://growbot.dev/build-esp32). The steps below are for the Pico 2 W.
 
-## 1. Wire the 2 servos to the Pico
+## 1. Wire the servos
 
-Each servo has 3 wires: signal (orange) · power (red) · ground (brown).
+**On the Waveshare Pico Servo Driver** (the board in the kit):
 
-| servo | signal → | red → | brown → |
-|---|---|---|---|
-| **left**  | **GP0** (pin 1) | battery + | common ground |
-| **right** | **GP1** (pin 2) | battery + | common ground |
+- Push the Pico into the board, USB ends matching.
+- Left servo into socket 0, right servo into socket 1. Match the wires to the labels: brown to G, red to V, yellow or orange to S.
+- Battery holder red to + (VIN) and black to GND, in the board's screw terminal. Never on the Pico's own pins.
 
-Both reds go to battery **+**. Then tie ALL the grounds together: battery **−**, a Pico **GND** pin, and both servo browns. One shared ground rail. That is the whole wiring.
+The Kitronik Robotics Board 5329 works too, with different sockets. See "want to use another board?" on [growbot.dev/build](https://growbot.dev/build).
 
-> Powering from USB while testing on a desk is fine for gentle moves, but real walking needs the battery pack. The servos spike harder than USB can supply.
+The servos run off the battery pack. USB alone won't move them.
 
-## 2. Put the firmware on the Pico
+## 2. Put the chip software on
 
-1. Hold the **BOOTSEL** button, plug the Pico into USB, a drive pops up.
-2. Drag `firmware/micropython-pico2w.uf2` onto that drive. It reboots.
-3. Copy 3 files from `firmware/` onto it. In a terminal:
+Easiest: step 02 of [growbot.dev/build](https://growbot.dev/build), in Chrome or Edge on a computer. It installs everything over USB and saves your Wi-Fi.
+
+By hand, with the files in [`firmware/`](firmware/):
+
+1. Hold **BOOTSEL** while you plug the Pico into USB. A drive called `RP2350` appears. Drag `micropython-pico2w.uf2` onto it.
+2. Copy `secrets.example.py` to `secrets.py` and fill in your Wi-Fi name and password. The Pico only joins 2.4 GHz Wi-Fi.
+3. Install mpremote (`pip install mpremote`), then from the `firmware/` folder:
    ```
-   mpremote cp PicoRobotics_gpio.py :PicoRobotics.py
-   mpremote cp act_engine.py        :act_engine.py
-   mpremote cp robot-server.py      :main.py
+   mpremote cp PicoRobotics.py :PicoRobotics.py
+   mpremote cp act_engine.py :act_engine.py
+   mpremote cp secrets.py :secrets.py
+   mpremote cp relay_chip.py :main.py
    mpremote reset
+   mpremote repl
    ```
-   *(No terminal? Install the free **Thonny** app and copy those 3 files onto the Pico, same result.)*
+4. Write down the `PAIRING CODE: gb-xxxxxx` it prints. You need it in step 4.
 
-   *(Using a Pico carrier board instead of direct-wire? Copy `PicoRobotics.py` instead of the `_gpio` variant.)*
+No terminal? In [Thonny](https://thonny.org), open each file and use File > Save As > Raspberry Pi Pico, saving `relay_chip.py` as `main.py`.
 
-## 3. Mount + wiggle test
+## 3. Mount it and run the movement check
 
-1. Print the body: STLs in [`hardware/print/`](hardware/print/) (plain PLA, no supports). Or no printer: [cutout template](hardware/cutout-template.html) at 100% on paper, build from any stiff material.
-2. One servo at each end, shafts facing **out**. Battery and Pico in the middle. Legs screw onto the servo horns. Phone mounts with foam tape.
-3. Power on. On your phone, join the wifi network named **`GrowBot-Setup`**, open **`http://192.168.4.1`**, pick your home wifi.
-4. It reboots onto your wifi. Open **`http://<pico-ip>/`** (the IP prints on the USB boot screen, or find it in your router) and tap **wiggle**.
-
-**Legs sweep = done.** Send a clip!
+1. Print the body from [`hardware/print/`](hardware/print/) (plain PLA, no supports). No printer? Use the [cutout template](hardware/cutout-template.html) at 100% on paper and build from any stiff material.
+2. Servo board at one end, battery holder at the other, both on foam tape. Fit the servos with their shafts pointing out, held with screws or hot glue.
+3. Unplug USB, put in 4 AA batteries and switch on. The movement check runs by itself: both servos centre, the right one sweeps, then the left, then both, and they park at 90.
+4. While they are parked, drop each servo horn into its leg's slot, then screw it onto the servo shaft so the leg sits straight out from the body.
+5. Switch off and on again. Right leg first, then left? Done. Wrong leg first? Switch off and swap the two servo plugs.
 
 **Legs turn but never stop?** You almost certainly have 360° continuous-rotation servos instead of
 standard 180° ones. They sell under nearly identical names. A standard servo swings to a position and
@@ -67,9 +71,12 @@ in software, invert one of them in your firmware so the rule above still holds.
 
 ## 4. Give it a brain
 
-- **Hosted brain**: go to [growbot.dev/start](https://growbot.dev/start) on the mounted phone.
-- **Your own brain**: see [`agent-harness/`](agent-harness/), a self-contained loop you run with your own LLM key.
+1. Mount the phone with foam tape or an elastic band: screen facing out, camera at the top, away from the batteries.
+2. On that phone, open `growbot.dev/v3/next.html?id=<your code>&mode=legs` and bookmark it. Step 09 of [growbot.dev/build](https://growbot.dev/build) gives you a QR code that does this and brings your leg trim along.
+3. Legs look uneven? Straighten them with step 07 (trim) of the build guide.
+
+Want your own model or your own code as the brain? See [`agent-harness/`](agent-harness/) and [growbot.dev/agent-docs.html](https://growbot.dev/agent-docs.html).
 
 ---
 
-*Want to port GrowBot to another board (ESP32, Pi, anything)? Start with [`PORTING.md`](PORTING.md) and the full wire contract at [growbot.dev/body-docs.html](https://growbot.dev/body-docs.html). Your board dials out to a relay and pairs with a code, so there is no tunnel and no LAN address. `protocol/PROTOCOL.md` and `conformance.html` describe the older LAN path, which the app no longer speaks. Ports are the PRs I most want to see.*
+*Building a different robot (wheels, more motors, another board)? Start with [PORTING.md](PORTING.md) and [growbot.dev/body-docs.html](https://growbot.dev/body-docs.html). Ports are the PRs I most want to see.*

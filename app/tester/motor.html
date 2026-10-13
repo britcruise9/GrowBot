@@ -1,0 +1,197 @@
+<!DOCTYPE html><html><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="color-scheme" content="dark">
+<title>Motor / Calibrate — GrowBot tester</title><style>
+:root{color-scheme:dark;--bg:#05070d;--panel:#0e1622;--line:rgba(120,160,200,.25);--text:#e8f6ff;--mut:#7f93ab;--teal:#37e0c8;--blue:#5ab0ff;--red:#8c1d2f;--amber:#e0a93b}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:system-ui;touch-action:none;-webkit-user-select:none}
+.wrap{display:block;height:100%;padding:8px;box-sizing:border-box;overflow:auto}.wrap>*+*{margin-top:7px}
+.top{display:flex;align-items:center}.top>*+*{margin-left:6px}
+#id{flex:1;min-width:0;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:9px;font-size:13px}
+.dot{width:11px;height:11px;border-radius:50%;background:#445;flex:0 0 auto}
+.dot.on{background:var(--teal);box-shadow:0 0 8px var(--teal)}
+button{font-size:14px;padding:10px 6px;background:#101826;color:#dfe8f3;border:1px solid #2a3a4d;border-radius:8px;font-weight:600}
+.sec{border:1px solid var(--line);border-radius:12px;padding:9px 10px;display:block}.sec>*+*{margin-top:7px}
+.sec h3{margin:0;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);font-weight:700}
+.sl{display:flex;align-items:center;font-size:11px;color:var(--mut)}.sl>*+*{margin-left:8px}
+.sl span{width:54px}.sl input[type=range]{flex:1}.sl b{width:42px;text-align:right;color:var(--text);font-variant-numeric:tabular-nums}
+.r{display:flex}.r>*+*{margin-left:6px}.r>button{flex:1}
+#stop{color:#ff6b81}
+.chip{font-size:13px;padding:9px 10px}
+.tog{font-size:11px;padding:7px 4px}
+.tog.neg{color:var(--teal);border-color:var(--teal)}
+.hint{font-size:10.5px;color:#5a6b85;line-height:1.45}
+.step{font-size:12.5px;font-weight:700;color:var(--text);margin-top:2px}
+.banner{background:rgba(55,224,200,.10);border:1px solid var(--teal);border-radius:10px;padding:9px 11px;font-size:12.5px;color:var(--text);line-height:1.45}
+.banner b{color:var(--teal)}
+.adv{border:1px solid var(--line);border-radius:9px;padding:7px 9px;display:block}.adv>*+*{margin-top:7px}
+.adv summary{color:var(--mut);font-weight:600;font-size:11.5px;cursor:pointer}
+.imu{display:flex;justify-content:space-around;font-size:11px;color:var(--mut);text-align:center}
+.imu b{display:block;font-size:14px;color:var(--text);font-variant-numeric:tabular-nums}
+#st{font-size:12px;color:var(--teal);text-align:center;min-height:1.1em}
+#trace{height:28vh;min-height:54px;background:#070b12;border:1px solid var(--line);border-radius:10px;padding:6px 8px;font:11px/1.45 ui-monospace,monospace;color:#9fb6cf;overflow:auto;white-space:pre-wrap}
+#trace .net{color:var(--blue)}#trace .err{color:#ff7a90}#trace .mv{color:var(--teal)}#trace .cal{color:var(--amber)}
+#start{position:fixed;top:0;left:0;right:0;bottom:0;margin:auto;width:84%;height:30%;font-size:22px;border-radius:22px}
+small{color:#566;font-size:10px}
+</style></head><body>
+<button id=start>TAP TO WAKE</button>
+
+<div class=wrap style=display:none id=ui>
+ <div class=top><span class=dot id=dot></span><input id=id placeholder="device id / pairing code (e.g. bench)"></div>
+ <div class=banner>Used the main build guide? Its step 07 already set your trim. Built from another guide, like ESP32? If a leg isn't straight at rest, use Step 2 below. Otherwise, use this only if something looks off. Saved in this browser only, so do it on the robot's phone.</div>
+
+ <div class=sec>
+   <h3>① Check the legs</h3>
+   <div class=hint><b>Run the 3 steps if something looks off.</b> (Advanced is only needed if a sweep goes backward.)</div>
+
+   <div class=step>Step 1 · which leg</div>
+   <div class=hint>The build guide wiring is the default: no swap needed. LEFT and RIGHT are the robot's sides, so LEFT is on your right when you face its screen. Tap each button and check which leg moves; ignore the movement direction.</div>
+   <div class=r><button id=mvL>move LEFT</button><button id=mvR>move RIGHT</button></div>
+   <details class=adv id=wiringhelp>
+     <summary id=wiringlabel>Troubleshooting: left and right connections reversed</summary>
+     <div class=hint>Use this only if LEFT moves the right leg and RIGHT moves the left leg. Walking backward does not mean the connections are reversed. Existing saved settings are kept. Screen-forward walking currently requires standard wiring with swap off.</div>
+     <div class=r><button class=tog id=swapLR>Swap left/right connections: OFF</button></div>
+   </details>
+
+   <div class=step>Step 2 · straighten</div>
+   <div class=hint>Trim until both legs hang straight down.</div>
+   <div class=sl><span>L trim</span><input id=lo type=range min=-30 max=30 value=0 oninput="CAL()"><b id=lov>0</b></div>
+   <div class=sl><span>R trim</span><input id=ro type=range min=-30 max=30 value=0 oninput="CAL()"><b id=rov>0</b></div>
+
+   <div class=step>Step 3 · direction</div>
+   <div class=hint>Tap a sweep — the leg should sweep <b>DOWN toward the screen</b> (that is forward). If it lifts UP or sweeps backward instead, open Advanced and flip that leg.</div>
+   <div class=r><button id=swL>sweep L fwd</button><button id=swR>sweep R fwd</button></div>
+
+   <details class=adv>
+     <summary>Advanced — flip a reversed leg or IMU axis</summary>
+     <div class=hint>Only if a sweep went backward, or the walk leans / splits. Tilt the phone; each axis should move the natural way.</div>
+     <div class=r><button class=tog id=sl_>L_SIGN -1</button><button class=tog id=sr_>R_SIGN +1</button></div>
+     <div class=imu><div>roll<b id=ir>-</b></div><div>pitch<b id=ip>-</b></div><div>yaw<b id=iy>-</b></div></div>
+     <div class=r><button class=tog id=si0>IMU roll +</button><button class=tog id=si1>IMU pitch +</button><button class=tog id=si2>IMU yaw +</button></div>
+   </details>
+
+   <div class=r><button id=resetcal>RESET CALIBRATION — fixes a broken walk</button></div>
+ </div>
+
+ <div class=sec>
+   <h3>Direct pose</h3>
+   <div class=sl><span>Left</span><input id=lL type=range min=5 max=175 value=90 oninput="DP()"><b id=lLv>90</b></div>
+   <div class=sl><span>Right</span><input id=lR type=range min=5 max=175 value=90 oninput="DP()"><b id=lRv>90</b></div>
+   <div class=r><button id=center>CENTER</button><button class=tog id=hold90>HOLD 90</button></div>
+   <div class=hint>Release limps after ~500ms. HOLD keeps both legs stiff at 90&deg; for gluing, tap again to let go.</div>
+ </div>
+
+ <div class=sec>
+   <h3>Gestures</h3>
+   <div class=r id=gestures></div>
+   <div class=r><button class=chip data-routine=wiggle>wiggle</button></div>
+ </div>
+
+ <button id=stop>STOP</button>
+ <div id=st>idle</div>
+ <div id=trace></div>
+</div>
+
+<script type="module">
+import { RelayBody } from '/relay-transport.js';
+const $=id=>document.getElementById(id);
+const qp=new URLSearchParams(location.search);
+const D2R=Math.PI/180, R2D=180/Math.PI;
+
+// body truth — bundled from creature-core/body.json (the 85mm 2-leg), optionally overridden by a served /v3/body.json
+let BODY={
+  servos:[{id:'L',band:[5,175],neutral:90},{id:'R',band:[5,175],neutral:90}],
+  walk:{cal:{L_SIGN:-1,R_SIGN:1,L_OFF:0,R_OFF:0,IMU_SIGN:[1,-1,1],gain:1,turn:0}},
+  gestures:{ wiggle:[{l:60,r:120,ms:180},{l:120,r:60,ms:180},{l:60,r:120,ms:180},{l:90,r:90,ms:220}],
+             bow:[{l:120,r:60,ms:520},{l:90,r:90,ms:480}],
+             sway:[{l:72,r:108,ms:700},{l:108,r:72,ms:700},{l:90,r:90,ms:400}] }
+};
+const cal=Object.assign({L_SIGN:-1,R_SIGN:1,L_OFF:0,R_OFF:0,IMU_SIGN:[1,-1,1],gain:1,turn:0,SWAP:0}, BODY.walk.cal);
+const DEFAULTS=JSON.parse(JSON.stringify(cal));   // known-good baseline (body defaults, pre-localStorage) for the reset button
+try{ Object.assign(cal, JSON.parse(localStorage.gb_walk_cal||'{}')); }catch(e){}   // shared per-device cal (Surface 1 + creature-core read it too)
+
+const tEl=$('trace');
+function trace(line,kind){ const d=document.createElement('div'); if(kind)d.className=kind; d.textContent='> '+line; tEl.appendChild(d); while(tEl.childElementCount>140)tEl.removeChild(tEl.firstChild); tEl.scrollTop=tEl.scrollHeight; }
+function saveCal(){ localStorage.gb_walk_cal=JSON.stringify(cal); }
+
+// relay (shared module)
+let body=null;
+function makeBody(id){ if(body) body.close(); var settled=false;
+  body=new RelayBody(id,{ onStatus:a=>{ $('dot').className='dot'+(a?' on':''); $('st').textContent=a?('body "'+id+'" ONLINE'):('no body on "'+id+'" yet'); trace(a?'body online':'body offline','net'); if(a&&!settled&&body&&body.ready){ settled=true; body.act([{l:84,r:96,ms:200},{l:96,r:84,ms:200},{l:90,r:90,ms:200}],'replace'); trace('settle wiggle (wakes the servos)','mv'); } },
+                          onAck:m=>trace('ack rid='+m.rid+' ok='+m.ok+(m.queued_ms!=null?(' queued_ms='+m.queued_ms):''),'net') });
+  body.connect(); trace('attaching to "'+id+'"','net');
+}
+
+// ── direct pose: each slider input streams a latest-wins pose frame; stop touching → dead-man limps (~500ms) ──
+window.DP=function(){ const l=+$('lL').value, r=+$('lR').value; $('lLv').textContent=l; $('lRv').textContent=r; if(body&&body.ready) body.pose(l,r); };
+$('center').onclick=()=>{ $('lL').value=90; $('lR').value=90; DP(); };
+
+// ── HOLD 90: re-sends the center pose faster than the ~500ms dead-man so legs stay stiff for gluing ──
+let holdT=null;
+function stopHold(){ if(holdT){ clearInterval(holdT); holdT=null; } $('hold90').textContent='HOLD 90'; $('hold90').className='tog'; }
+$('hold90').onclick=()=>{
+  if(holdT){ stopHold(); return; }
+  $('lL').value=90; $('lR').value=90; DP();
+  holdT=setInterval(()=>{ if(body&&body.ready) body.pose(90,90); },200);
+  $('hold90').textContent='HOLD 90 ✓'; $('hold90').className='tog neg';
+};
+$('lL').addEventListener('input',stopHold); $('lR').addEventListener('input',stopHold);   // manual drag wins over HOLD
+document.addEventListener('visibilitychange',()=>{ if(document.hidden) stopHold(); });     // background tabs throttle timers below the dead-man -> legs would twitch; release cleanly instead
+
+// ── discrete moves/gestures over the act lane (glide + self-limp); they release the hold (one lane at a time) ──
+function act(steps,label){ stopHold(); if(!body||!body.ready){ trace('no body connected','err'); return; } const rid=body.act(steps,'replace'); trace('act ['+label+'] rid='+rid,'mv'); let i=0; const tot=steps.reduce((a,s)=>a+(s.ms||300),0); const t0=performance.now(); const anim=()=>{ const e=performance.now()-t0; let acc=0,cur=steps[steps.length-1]; for(const s of steps){ if(e<acc+(s.ms||300)){ cur=s; break; } acc+=s.ms||300; } $('lLv').textContent=Math.round(cur.l); $('lRv').textContent=Math.round(cur.r); if(e<tot) requestAnimationFrame(anim); }; requestAnimationFrame(anim); }
+
+// gesture chips from body.gestures
+const gz=$('gestures');
+Object.keys(BODY.gestures).forEach(name=>{ const b=document.createElement('button'); b.className='chip'; b.textContent=name; b.onclick=()=>act(BODY.gestures[name],name); gz.appendChild(b); });
+document.querySelectorAll('[data-routine]').forEach(b=>b.onclick=()=>{ if(body&&body.ready){ const rid=body.routine(b.dataset.routine); trace('routine '+b.dataset.routine+' rid='+rid,'mv'); } else trace('no body connected','err'); });
+
+// ── calibration (writes shared gb_walk_cal) ──
+$('mvL').onclick=()=>act([{l:125,r:90,ms:450},{l:90,r:90,ms:400}],'which-leg: LEFT');
+$('mvR').onclick=()=>act([{l:90,r:125,ms:450},{l:90,r:90,ms:400}],'which-leg: RIGHT');
+$('swL').onclick=()=>{ const fwd=90+cal.L_SIGN*30; act([{l:fwd,r:90,ms:500},{l:90,r:90,ms:400}],'sweep L (sign '+(cal.L_SIGN>0?'+':'-')+')'); };
+$('swR').onclick=()=>{ const fwd=90+cal.R_SIGN*30; act([{l:90,r:fwd,ms:500},{l:90,r:90,ms:400}],'sweep R (sign '+(cal.R_SIGN>0?'+':'-')+')'); };
+window.CAL=function(){ cal.L_OFF=+$('lo').value; cal.R_OFF=+$('ro').value; $('lov').textContent=cal.L_OFF; $('rov').textContent=cal.R_OFF; saveCal();
+  act([{l:90+cal.L_OFF,r:90+cal.R_OFF,ms:300}],'trim L'+cal.L_OFF+' R'+cal.R_OFF); };
+function refreshTogs(){
+  $('sl_').textContent='L_SIGN '+(cal.L_SIGN>0?'+1':'-1'); $('sl_').className='tog'+(cal.L_SIGN<0?' neg':'');
+  $('sr_').textContent='R_SIGN '+(cal.R_SIGN>0?'+1':'-1'); $('sr_').className='tog'+(cal.R_SIGN<0?' neg':'');
+  $('si0').textContent='IMU roll '+(cal.IMU_SIGN[0]>0?'+':'-'); $('si0').className='tog'+(cal.IMU_SIGN[0]<0?' neg':'');
+  $('si1').textContent='IMU pitch '+(cal.IMU_SIGN[1]>0?'+':'-'); $('si1').className='tog'+(cal.IMU_SIGN[1]<0?' neg':'');
+  $('si2').textContent='IMU yaw '+(cal.IMU_SIGN[2]>0?'+':'-'); $('si2').className='tog'+(cal.IMU_SIGN[2]<0?' neg':'');
+  $('swapLR').textContent='Swap left/right connections: '+(cal.SWAP?'ON':'OFF');
+  $('wiringlabel').textContent=cal.SWAP?'Troubleshooting: saved left/right swap is ON':'Troubleshooting: left and right connections reversed';if(cal.SWAP)$('wiringhelp').open=true; $('swapLR').className='tog'+(cal.SWAP?' neg':'');
+  $('lo').value=cal.L_OFF; $('lov').textContent=cal.L_OFF; $('ro').value=cal.R_OFF; $('rov').textContent=cal.R_OFF;
+}
+$('sl_').onclick=()=>{cal.L_SIGN*=-1;refreshTogs();saveCal();trace('L_SIGN='+cal.L_SIGN,'cal');};
+$('sr_').onclick=()=>{cal.R_SIGN*=-1;refreshTogs();saveCal();trace('R_SIGN='+cal.R_SIGN,'cal');};
+$('si0').onclick=()=>{cal.IMU_SIGN[0]*=-1;refreshTogs();saveCal();trace('IMU roll sign='+cal.IMU_SIGN[0],'cal');};
+$('si1').onclick=()=>{cal.IMU_SIGN[1]*=-1;refreshTogs();saveCal();trace('IMU pitch sign='+cal.IMU_SIGN[1],'cal');};
+$('si2').onclick=()=>{cal.IMU_SIGN[2]*=-1;refreshTogs();saveCal();trace('IMU yaw sign='+cal.IMU_SIGN[2],'cal');};
+$('swapLR').onclick=()=>{cal.SWAP=cal.SWAP?0:1;refreshTogs();saveCal();trace('SWAP='+cal.SWAP,'cal');$('st').textContent='L/R swap '+(cal.SWAP?'ON':'OFF')+'. Test each named leg again to confirm.';};
+$('resetcal').onclick=()=>{ Object.assign(cal, JSON.parse(JSON.stringify(DEFAULTS))); refreshTogs(); saveCal(); $('st').textContent='calibration reset to defaults'; trace('calibration reset: L_SIGN -1, R_SIGN +1, IMU 1,-1,1, trim 0','cal'); };
+
+$('stop').onclick=()=>{ stopHold(); if(body) body.stop(); $('st').textContent='STOP, legs limp'; trace('STOP','mv'); };
+
+// IMU readout (orientation) — for step 4
+let base=null;
+function onOri(e){ if(e.alpha==null) return; if(!base) base={a:e.alpha,b:e.beta,g:e.gamma};
+  const wrap=x=>((x+180)%360+360)%360-180;
+  $('ir').textContent=(cal.IMU_SIGN[0]*wrap(e.gamma-base.g)).toFixed(0);
+  $('ip').textContent=(cal.IMU_SIGN[1]*wrap(e.beta-base.b)).toFixed(0);
+  $('iy').textContent=(cal.IMU_SIGN[2]*wrap(e.alpha-base.a)).toFixed(0);
+}
+
+function connect(){ const id=($('id').value.trim()||'bench'); localStorage.gb_walk_id=id; makeBody(id); }
+$('id').addEventListener('change',connect);
+$('id').value = qp.get('id') || localStorage.gb_walk_id || 'bench';
+
+async function wake(){
+  try{ if(window.DeviceOrientationEvent&&DeviceOrientationEvent.requestPermission) await DeviceOrientationEvent.requestPermission(); }catch(e){}
+  try{ const b=await fetch('/v3/body.json',{cache:'no-store'}); if(b.ok){ const j=await b.json(); if(j&&j.gestures) BODY=j; trace('loaded served body.json','net'); } }catch(e){}   // optional override; bundled defaults otherwise
+  window.addEventListener('deviceorientation',onOri,{passive:true});
+  $('start').style.display='none'; $('ui').style.display='block';   /* block, NOT flex — .wrap is display:block since the 0726 iOS12 fix (gap-less owl margins); an inline flex here re-created a ROW (flex-direction:column is gone) and threw every section off-screen right on ALL devices post-wake (Brit's Android field report 0726-eve) */
+  refreshTogs(); DP(); connect();
+  trace('woke — connect a body, then pose / gesture / calibrate','net');
+}
+$('start').addEventListener('click',wake);
+</script></body></html>

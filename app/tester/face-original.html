@@ -1,0 +1,139 @@
+<!DOCTYPE html><html><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Face Track · GrowBot</title><style>
+:root{color-scheme:dark;--bg:#05070d;--panel:#0e1622;--line:rgba(120,160,200,.25);--text:#e8f6ff;--mut:#7f93ab;--teal:#37e0c8;--red:#ff6b81}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:system-ui;touch-action:none;-webkit-user-select:none}
+.wrap{display:flex;flex-direction:column;height:100%;padding:8px;box-sizing:border-box;gap:7px}
+.top{display:flex;gap:6px;align-items:center}
+#id{flex:1;min-width:0;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:9px;font-size:13px}
+.dot{width:11px;height:11px;border-radius:50%;background:#445;flex:0 0 auto}.dot.on{background:var(--teal);box-shadow:0 0 8px var(--teal)}
+button{font-size:14px;padding:11px 8px;background:#101826;color:#dfe8f3;border:1px solid #2a3a4d;border-radius:8px;font-weight:600}
+#stop{color:var(--red)}
+label.sw{font-size:12px;color:var(--mut);display:flex;align-items:center;gap:5px;white-space:nowrap}
+.stage{flex:1;position:relative;background:#000;border:1px solid var(--line);border-radius:12px;overflow:hidden;min-height:200px}
+#vid{position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;object-fit:contain;transform:scaleX(-1)}
+#ov{position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%}
+#st{font-size:12px;color:var(--teal);text-align:center;min-height:1.1em}
+.sl{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--mut)}.sl span{width:74px}.sl input{flex:1}.sl b{width:32px;text-align:right;color:var(--text);font-variant-numeric:tabular-nums}
+.r{display:flex;gap:6px}.r>button{flex:1}
+#start{position:fixed;top:0;left:0;right:0;bottom:0;margin:auto;width:84%;height:30%;font-size:22px;border-radius:22px}
+small{color:#566;font-size:10px}
+#trace{height:50px;background:#070b12;border:1px solid var(--line);border-radius:10px;padding:6px 8px;font:11px/1.4 ui-monospace,monospace;color:#9fb6cf;overflow:auto;white-space:pre-wrap}
+</style></head><body>
+<button id=start>TAP TO START<br><small>front camera · legs follow automatically · STOP stays stopped</small></button>
+<a id=combinedSetup href="./face.html?setup=combined" style="position:fixed;top:12px;right:12px;z-index:3;padding:10px;background:var(--panel);color:var(--teal);border:1px solid var(--line);border-radius:8px;text-decoration:none">Use Combined →</a>
+
+<div class=wrap style=display:none id=ui>
+  <div id=profileNotice style="font-size:12px;color:var(--mut)">Original · different or unknown calibration. Your saved setup is unchanged.</div>
+  <div class=top><span class=dot id=dot></span><input id=id placeholder="pairing code (e.g. gb-xxxxxx)"><label class=sw><input type=checkbox id=follow> legs follow</label></div>
+  <div id=ladface style="display:none;font-size:12px;color:var(--mut)">Show one face. Follow pauses when it disappears and resumes when it returns. STOP stays stopped.</div>
+  <div class=stage><video id=vid playsinline muted autoplay></video><canvas id=ov></canvas></div>
+  <div id=st>starting…</div>
+  <div class=sl><span>sensitivity</span><input type=range id=gain min=10 max=100 value=70><b id=gv>70</b></div>
+  <div class=r><button id=flip>flip ⟷ direction</button><button id=stop>STOP</button></div>
+  <div id=trace></div>
+</div>
+
+<script type="module">
+import { RelayBody } from '/relay-transport.js';
+const $=id=>document.getElementById(id);
+const qp=new URLSearchParams(location.search);
+const tEl=$('trace'); function trace(s){ const d=document.createElement('div'); d.textContent='> '+s; tEl.appendChild(d); while(tEl.childElementCount>60)tEl.removeChild(tEl.firstChild); tEl.scrollTop=tEl.scrollHeight; }
+try{ if((localStorage.gb_ui_mode||'simple')!=='expert') $('ladface').style.display='block'; }catch(e){}   // SIMPLE-mode banner (0715): this tab is an optional stop on the numbered path
+
+// ── relay (shared transport) — face demo drives the WALK lane just like the other remotes ──
+let body=null,armed=false,wantFollow=false,armEpoch=0,lastFrame=-Infinity,seenSince=null,centerSince=null;
+function releaseTracking(){armed=false;armEpoch++;seenSince=centerSince=null;target=targetY=smooth=0;lastFace=-Infinity;if(body)try{body.stop();}catch(e){}}
+function disarm(reason){wantFollow=false;$('follow').checked=false;releaseTracking();$('st').textContent=reason;trace(reason);}
+function pauseFace(reason){if(armed||seenSince!==null)releaseTracking();$('st').textContent=reason;}
+function cameraFresh(now){return !document.hidden&&video.readyState>=2&&!video.paused&&video.srcObject?.getVideoTracks()[0]?.readyState==='live'&&now-lastFrame<400;}
+function requestFollow(){
+  releaseTracking();wantFollow=true;$('follow').checked=true;$('st').textContent='Waiting for camera, body and one steady face';
+}
+$('follow').onchange=()=>{if(!$('follow').checked)disarm('Follow off — legs released');else requestFollow();};
+addEventListener('pagehide',()=>disarm('Page closed — follow stopped'));document.addEventListener('visibilitychange',()=>{if(document.hidden)disarm('Page hidden — follow stopped');});
+function makeBody(id){disarm('Body connection changed — enable follow when ready');if(body)body.close();body=null;if(!id){$('st').textContent='Enter your robot’s pairing code';return;}let wasOnline=false;const next=new RelayBody(id,{onStatus:a=>{if(body!==next)return;if(!a&&wasOnline)disarm('Body offline — enable follow after reconnecting');if(a)wasOnline=true;$('dot').className='dot'+(a?' on':'');trace(a?'body online':'body offline');}});body=next;body.connect();}
+$('id').value=qp.has('id')?(qp.get('id')||''):localStorage.gb_walk_id||'';
+$('id').addEventListener('change',()=>{const firstPair=!body&&wantFollow;const id=$('id').value.trim();if(id)localStorage.gb_walk_id=id;makeBody(id);if(firstPair&&body)requestFollow();});
+
+const video=$('vid'), ov=$('ov'), ctx=ov.getContext('2d');
+let detector=null, dir=1, gain=0.7, smooth=0, target=0, lastFace=0, sendT=0, lastVT=-1, targetY=0,lastTick=0;
+try{ dir=(+localStorage.gb_face_dir===-1)?-1:1; }catch(e){}   // remember the flip per device (field 0722: servo mounting varies per build — "goes down when I go right" = un-flipped dir, and the choice was forgotten every reload)
+
+async function start(){
+  const startEpoch=armEpoch;
+  $('start').style.display='none'; $('ui').style.display='flex';
+  // 1. front camera
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'user', width:{ideal:640}, height:{ideal:480} }, audio:false });
+    video.srcObject=stream; await video.play(); trace('camera on');
+  }catch(e){ $('st').textContent='camera blocked: '+e.message; trace('camera error: '+e.message); return; }
+  // 2. face model (MediaPipe BlazeFace, loaded from CDN; dynamic import so a CDN miss doesn't kill the page)
+  $('st').textContent='loading face model…';
+  try{
+    const V='https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18';
+    const { FaceDetector, FilesetResolver } = await import(V+'/vision_bundle.mjs');
+    const fileset = await FilesetResolver.forVisionTasks(V+'/wasm');
+    detector = await FaceDetector.createFromOptions(fileset, {
+      baseOptions:{ modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite', delegate:'GPU' },
+      runningMode:'VIDEO', minDetectionConfidence:0.5 });
+    trace('face model ready'); $('st').textContent='show your face';
+  }catch(e){ $('st').textContent='face model failed to load: '+e.message; trace('model error: '+e.message); return; }
+  const allowAuto=armEpoch===startEpoch;
+  makeBody($('id').value.trim());
+  if(allowAuto)requestFollow();
+  requestAnimationFrame(loop);
+}
+$('start').addEventListener('click', start);
+$('gain').addEventListener('input',()=>{ gain=+$('gain').value/100; $('gv').textContent=$('gain').value; });
+$('flip').onclick=()=>{ dir*=-1; try{ localStorage.gb_face_dir=dir; }catch(e){} trace('direction flipped (dir='+dir+') — saved for this device'); };
+$('stop').onclick=()=>disarm('STOP — legs released. Enable legs follow to start again.');
+
+// Reach setup before camera/auto-follow, or stop synchronously before leaving.
+$('combinedSetup').onclick=e=>{e.preventDefault();disarm('Opening Combined setup — legs released');const url=new URL('./face.html',location.href);url.search=location.search;url.searchParams.set('setup','combined');const id=$('id').value.trim();url.searchParams.set('id',id);location.href=url.href;};
+$('start').addEventListener('click',()=>{const link=$('combinedSetup');link.style.position='static';link.style.display='inline-block';$('profileNotice').appendChild(link);});
+
+function loop(){
+  const now=performance.now(),dt=Math.min(.1,Math.max(0,(now-lastTick)/1000));lastTick=now;
+  if(wantFollow&&seenSince!==null&&!cameraFresh(now)){
+    if(armed)disarm('Camera unavailable — enable follow when ready');else pauseFace('Waiting for fresh camera frames');
+  }
+  if(detector&&video.readyState>=2&&video.currentTime!==lastVT){
+    lastVT=video.currentTime;lastFrame=now;
+    let detections=[];
+    try{detections=detector.detectForVideo(video,now)?.detections||[];}catch(e){}
+    ov.width=ov.clientWidth;ov.height=ov.clientHeight;ctx.clearRect(0,0,ov.width,ov.height);
+    const vw=video.videoWidth||640,vh=video.videoHeight||480;
+    // Full uncropped camera coordinates, matching object-fit:contain and mirroring.
+    const scale=Math.min(ov.width/vw,ov.height/vh),ox=(ov.width-vw*scale)/2,oy=(ov.height-vh*scale)/2;
+    ctx.strokeStyle='rgba(127,147,171,.6)';ctx.lineWidth=1;
+    ctx.strokeRect(ox+vw*.42*scale,oy+vh*.42*scale,vw*.16*scale,vh*.16*scale);
+    if(detections.length===1){
+      const bb=detections[0]?.boundingBox||{};
+      const nx=(bb.originX+bb.width/2)/vw-.5,ny=(bb.originY+bb.height/2)/vh-.5;
+      if(Number.isFinite(nx)&&Number.isFinite(ny)&&Math.abs(nx)<=.5&&Math.abs(ny)<=.5){
+        target=nx;targetY=ny;lastFace=now;
+        ctx.strokeStyle='#37e0c8';ctx.lineWidth=3;
+        ctx.strokeRect(ox+(vw-bb.originX-bb.width)*scale,oy+bb.originY*scale,bb.width*scale,bb.height*scale);
+        if(wantFollow&&cameraFresh(now)&&body?.ready&&body.awake){
+          if(seenSince===null)seenSince=now;
+          if(now-seenSince>=250)armed=true;
+          const both=Math.abs(nx)<=.08&&Math.abs(ny)<=.08;
+          if(!both)centerSince=null;else if(centerSince===null)centerSince=now;
+          $('st').textContent=!armed?'Face found — settling…':both&&now-centerSince>=2000?'Centered · both axes':'Following · left/right '+nx.toFixed(2)+' · up/down '+ny.toFixed(2)+' · vertical movement not calibrated';
+        }
+      }else if(wantFollow)pauseFace('Waiting for a valid face');
+    }else if(wantFollow)pauseFace(detections.length>1?'Show one face — waiting':'Face lost — waiting to follow again');
+  }
+  smooth+=(target-smooth)*(1-Math.exp(-dt/0.12));
+  if(armed&&(!cameraFresh(now)||!body?.ready||!body.awake))disarm('Camera or body unavailable — enable follow when ready');
+  if(armed&&now-lastFace>=400)pauseFace('Face lost — waiting to follow again');
+  if(armed&&wantFollow&&cameraFresh(now)&&body?.ready&&body.awake&&now-lastFace<400&&now-sendT>50){
+    sendT=now;
+    const off=-smooth*dir*gain*180,cl=v=>Math.max(5,Math.min(175,Math.round(v)));
+    body.pose(cl(90+off),cl(90-off));
+  }
+  requestAnimationFrame(loop);
+}
+</script></body></html>

@@ -1,0 +1,16 @@
+{
+  "source": "optional-gyro-1001-packaging-r2",
+  "base": "cb34ed936fed1604263439e806eec404d282c29e",
+  "files": {
+    "runner.mjs": "b6d099c6138fbe734dbfddd1d020888bc4d8003f0df7d5e55a79a3d3d0daef14",
+    "baseline-runner.mjs": "1c60aceff0ddeaab8a4bb3804a3b0d7550f5c7a1fb24bd04467b0011494cf029",
+    "shared.json": "07d47bfb9c63fe1e88c0270ca25c587db61e0deba37e50de388d9c5fa4d579a1",
+    "specialist.json": "aa136d27272e63452068883cb9578026fd167e4ee472054a672863ead14b3b45"
+  },
+  "scope": "Manual supervised five-second bench only. Numerical parity is not physical validation.",
+  "commentRedaction1003": {
+    "file": "baseline-runner.mjs",
+    "previousSha256": "0ced069f866b17be512bb450c62a98672493779bb0e0493609ff6cbd6de11db8",
+    "reason": "Removed private robot identifier from comments only; numerical code and model files unchanged."
+  }
+}

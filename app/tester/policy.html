@@ -1,0 +1,702 @@
+<!DOCTYPE html><html><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="color-scheme" content="dark">
+<title>Policy Remote · GrowBot tester</title><style>
+:root{color-scheme:dark;--bg:#05070d;--panel:#0e1622;--line:rgba(120,160,200,.25);--text:#e8f6ff;--mut:#7f93ab;--teal:#37e0c8;--blue:#5ab0ff;--red:#ff6b81}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:system-ui;touch-action:none;-webkit-user-select:none}
+.wrap{display:flex;flex-direction:column;height:100%;padding:8px;box-sizing:border-box;gap:6px;overflow:auto}
+.top{display:flex;gap:6px;align-items:center}
+#id{flex:1;min-width:0;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:9px;font-size:13px}
+.dot{width:11px;height:11px;border-radius:50%;background:#445;flex:0 0 auto}
+.dot.on{background:var(--teal);box-shadow:0 0 8px var(--teal)}
+.dot.lost{background:var(--red);box-shadow:0 0 8px var(--red);animation:dotpulse 1s ease-in-out infinite}
+@keyframes dotpulse{0%,100%{opacity:1}50%{opacity:.3}}
+button{font-size:14px;padding:11px 6px;background:#101826;color:#dfe8f3;border:1px solid #2a3a4d;border-radius:8px;font-weight:600}
+#polbar{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--mut);background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:7px 10px}
+#polbar b{color:var(--teal)}#load{font-size:13px;padding:7px 11px}
+.imu{display:flex;justify-content:space-around;font-size:11px;color:var(--mut);text-align:center}
+.imu b{display:block;font-size:15px;color:var(--text);font-variant-numeric:tabular-nums}
+.r{display:flex;gap:6px}.r>button{flex:1}
+#walkn{font-size:16px;padding:18px}
+#stop{color:var(--red)}
+.sl{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--mut)}
+.sl span{width:58px}.sl input[type=range]{flex:1}.sl b{width:44px;text-align:right;color:var(--text);font-variant-numeric:tabular-nums}
+.tog{font-size:11px;padding:7px 4px}
+#st{font-size:12px;color:var(--teal);text-align:center;min-height:1.1em}
+#start{position:fixed;top:0;left:0;right:0;bottom:0;margin:auto;width:84%;height:30%;font-size:22px;border-radius:22px}
+small{color:#566;font-size:10px}
+.hint{font-size:10.5px;color:#5a6b85;line-height:1.4;text-align:center}
+/* calibration echo — the cal this tab ACTUALLY ran with, re-rendered at every pullCal() */
+#calecho{font:11px/1.45 ui-monospace,Menlo,monospace;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 8px;color:var(--mut);word-break:break-word}
+#calecho b{color:var(--text);font-weight:600}
+#calecho .ok{color:var(--teal)}
+#calecho .bad{color:var(--red);font-weight:700}
+#calecho.warn{border-color:var(--red);box-shadow:0 0 0 1px var(--red) inset}
+.nsec{display:flex;gap:5px;align-items:center}.nsec input{width:48px;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:9px;padding:8px;font-size:14px;text-align:center}
+/* steerable direction presets (shown only for policies that declare an obs_spec) */
+#steer,#modes{display:none;flex-direction:column;gap:6px}
+#spindir{display:none}   /* 0930: shown (flex) only while spin v4 is the loaded policy; see applyPolicy */
+.dirb.on{border-color:var(--teal);color:var(--teal)}
+#quickpolicies .on,#legswap.on,#legdir.on{border-color:var(--teal);color:var(--teal)}
+#trace{flex:1;min-height:60px;background:#070b12;border:1px solid var(--line);border-radius:10px;padding:6px 8px;font:11px/1.45 ui-monospace,monospace;color:#9fb6cf;overflow:auto;white-space:pre-wrap}
+#trace .net{color:var(--blue)}#trace .err{color:#ff7a90}#trace .mv{color:var(--teal)}
+/* gallery panel */
+#gal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(3,6,12,.95);display:none;flex-direction:column;padding:14px;gap:10px;z-index:9;overflow:auto}
+#gal.show{display:flex}
+#gal h2{margin:0;font-size:17px;flex:1}
+.glist{flex:1;display:flex;flex-direction:column;gap:8px}
+.gitem{display:flex;align-items:center;gap:10px;background:#101826;border:1px solid var(--line);border-radius:12px;padding:12px 14px;text-align:left;color:var(--text)}
+.gitem.pin{border-color:rgba(55,224,200,.5)}
+.gitem .nm{flex:1;min-width:0}.gitem .nm b{display:block}.gitem .nm small{color:var(--mut)}
+.badge{font-size:10px;color:#04110f;background:var(--teal);border-radius:6px;padding:2px 7px;font-weight:800}
+.up{background:var(--panel);border:1px dashed var(--line);border-radius:12px;padding:11px;display:flex;flex-direction:column;gap:7px}
+.up input{background:#0a121c;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:8px;font-size:13px;font-family:inherit}
+.galnote{color:var(--mut);font-size:12.5px;line-height:1.55;background:var(--panel);border:1px dashed var(--line);border-radius:12px;padding:11px 12px;text-align:center}
+/* ── SIMPLE-mode guided ladder (0715) ── */
+#ladder{display:none;flex-direction:column;gap:10px}
+.rung{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 13px;opacity:.4;pointer-events:none}
+.rung.live{opacity:1;pointer-events:auto;border-color:rgba(55,224,200,.45)}
+.rung.done{opacity:1;pointer-events:auto;border-color:rgba(47,122,104,.5);background:#0b1a18}
+.rung .hd{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.rung .num{width:20px;height:20px;flex:0 0 auto;border-radius:50%;border:1px solid #2a3a4d;color:var(--mut);font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.rung.live .num{border-color:var(--teal);color:var(--teal)}
+.rung.done .num{background:#2f7a68;border-color:#2f7a68;color:#04110f}
+.rung .tt{font-size:13.5px;font-weight:700}
+.rung .why{font-size:11.5px;color:var(--mut);line-height:1.55;margin-bottom:10px}
+.rung .act{width:100%;padding:14px;border-radius:9px;font-size:15px;font-weight:700}
+.rung .ask{display:none;gap:7px;margin-top:9px}
+.rung .ask.show{display:flex}
+.rung .ask button{flex:1;font-size:12.5px;padding:11px 6px}
+.rung .ask .yes{border-color:rgba(55,224,200,.5);color:var(--teal)}
+.rung .res{font-size:11.5px;color:var(--teal);min-height:1.1em;margin-top:8px;line-height:1.5}
+.launchbtn{padding:18px;border-radius:12px;border:1px solid var(--teal);background:rgba(55,224,200,.09);color:var(--teal);font-size:17px;font-weight:800;width:100%}
+.escx{background:none;border:0;color:#5a6b85;font-size:11px;text-decoration:underline;padding:10px;align-self:center;font-weight:400}
+</style></head><body>
+<button id=start>TAP TO WAKE<br><small>grants motion, connects relay, loads policy</small></button>
+
+<div class=wrap style=display:none id=ui>
+ <div class=top>
+   <span class=dot id=dot></span>
+   <input id=id placeholder="device id / pairing code (e.g. bench)">
+ </div>
+ <div id=quickpolicies class=r aria-label="Try these movements in order">
+  <button data-policy="screen_forward">1. Forward</button><button data-policy="official">2. Backward</button><button data-policy="gallery:46181387">3. Spin</button>
+ </div>
+ <div id=forwardhelp class=hint>Forward is toward the phone screen. For the stock two-leg body with SWAP off. If the legs look off, fix them in the Calibrate tab first. Hold still for the sensors, then run.</div>
+ <div id=forwardstatus class=hint>Gyro: waiting | Gravity: waiting | Sign: measuring | Age: no readings</div>
+ <div id=ladder>
+  <div class=hint id=motionhelp>GrowBot is powered by neural networks for motion, known as <b>policies</b>. This tab runs one.</div>
+  <div class="rung live" id=ladr>
+   <div class=hd><span class=num id=ladn>→</span><span class=tt id=ladtitle>Try the screen-forward walk</span></div>
+   <div class=why id=ladwhy>First try forward, toward the screen. The existing walk is backward. Spin is third. Each run lasts five seconds after settling.</div>
+   <button class=act id=ladwalk>WALK FORWARD 5 SECONDS</button>
+   <div class=r><button id=ladzero>RE-ZERO FOR SPIN</button><button id=ladstop>STOP</button></div>
+   <div class=res id=ladres></div>
+   <div class=ask id=ladask><button class=yes id=ladyes>it walked ✓</button><button id=ladno>it leaned or split</button></div>
+  </div>
+  <button class=escx id=lesc>I know what I am doing · expert mode</button>
+ </div>
+ <p id="spinhelp" class="hint" hidden><b>Spin v4</b><br>Place the robot flat, screen up. Pick a direction, press RE-ZERO while still, then RUN SPIN. It uses your trims and gain with the spin's own wiring, the same as the agent. Checked on one robot with SWAP off; results may vary.</p>
+ <div id=spindir class=r style="display:none"><button class="dirb on" data-dir=right>↻ spin right (CW)</button><button class=dirb data-dir=left>↺ spin left (CCW)</button></div><div id=polbar><span>policy: <b id=polname>Screen-forward walk</b></span><button id=load>Load policy</button></div>
+ <div class=imu>
+   <div><span id=lb0>roll</span><b id=ir>-</b></div><div><span id=lb1>pitch</span><b id=ip>-</b></div><div><span id=lb2>yaw</span><b id=iy>-</b></div>
+   <div><span>gravity</span><b id=igrav style="color:var(--teal)">-</b></div>
+   <div>L<b id=il>90</b></div><div>R<b id=irr>90</b></div><div>Hz<b id=ihz>0</b></div>
+ </div>
+ <div class=hint><b>Legs look off? Fix them in the Calibrate tab first.</b> If the walk leans or splits, hit RESET there. · L/R = leg angle, Hz = motor commands per second</div>
+ <div id=calecho>cal: —</div>
+ <div id=steer>
+   <div class=hint>steerable — pick a direction, then tap RUN WALK</div>
+   <div class=r><button class=dirb data-yaw=1.2>turn left</button><button class="dirb on" data-yaw=0>forward</button><button class=dirb data-yaw=-1.2>turn right</button><button class=dirb data-yaw=0 data-fwd=-1>⏪ reverse</button></div>
+ </div>
+ <div id=modes>
+   <div class=hint>joystick — pick a mode, then tap RUN WALK</div>
+   <div class=r><button class="dirb on" data-mode=1>▲ forward</button><button class=dirb data-mode=2>◀ turn left</button><button class=dirb data-mode=3>turn right ▶</button><button class=dirb data-mode=0>■ stop</button></div>
+ </div>
+ <div class=r>
+   <div class=nsec><span style="color:var(--mut);font-size:11px">walk</span><input id=nsec type=number min=1 max=30 value=5><span style="color:var(--mut);font-size:11px">s</span></div>
+   <button id=walkn>RUN WALK</button>
+ </div>
+ <div class=r><button id=rest>REST</button><button id=zero>RE-ZERO</button><button id=stop>STOP</button></div>
+ <div class=sl><span>gain</span><input id=gn type=range min=0 max=200 value=100 oninput="P()"><b id=gnv>1.0</b></div>
+<!-- cadence + turn sliders removed 0728 (Brit: "everything is 25hz now" + turn unused). Cadence follows the policy's own trained rate; turn stays 0. -->
+ <div id=st>idle</div>
+ <div id=trace></div>
+</div>
+
+<div id=gal>
+ <div class=top><h2>Policy gallery</h2><button id=galclose style="flex:0 0 auto">x</button></div>
+ <div class=glist id=glist>loading…</div>
+ <div class=up id=locrow style="border-bottom:1px solid #1e2a3a;padding-bottom:10px;margin-bottom:4px">
+   <div style="font-size:12px;color:var(--mut)">Test a policy file from this device. It is not uploaded and not shared, and it is gone when you reload.</div>
+   <input type=file id=locf accept=".json,application/json">
+   <button id=locbtn>RUN LOCAL FILE</button>
+   <div id=locmsg style="font-size:12px;color:var(--mut);min-height:1em"></div>
+ </div>
+ <div class=up id=uprow>
+   <input type=file id=upf accept=".json,application/json">
+   <input type=text id=upn maxlength=80 placeholder="name (e.g. Brisk forward gait)">
+   <input type=text id=upa maxlength=60 placeholder="author">
+   <button id=upbtn>UPLOAD</button>
+   <div id=upmsg style="font-size:12px;color:var(--mut);min-height:1em"></div>
+ </div>
+ <a href="/gallery.html" id=galfull target=_blank style="color:var(--blue);font-size:12px;text-align:center;text-decoration:none">open full gallery</a>
+</div>
+
+<script src="/v2/episodes-recorder.js"></script>
+<script src="/forward-walk.js?v=1001"></script>
+<script src="/forward-basic.js?v=1001"></script>
+<script src="/tester/forward-test.js?v=1001c"></script>
+<script src="/spin-wire.js?v=0930"></script><!-- 0930: the spin v4 wiring (window.GBSpinWire), the SAME file the v3 agent's runSpinPolicy uses, so RUN SPIN and the agent cannot drift -->
+<script>
+/* 0810 old-device black-box recorder (classic script ON PURPOSE: a module-graph parse failure —
+   exactly what broke iPhone 6 here, ?? in growbot_runner.js — kills the module before any of its
+   own code could report; this classic script survives and paints the failure onto the button the
+   user is already looking at, so the next field report arrives pre-diagnosed). */
+window.addEventListener('error', function(ev){
+  try{
+    var m = (ev && (ev.message || (ev.error && ev.error.message))) || ('failed to load ' + ((ev && ev.target && (ev.target.src || ev.target.href)) || 'a script'));
+    var b = document.getElementById('start');
+    if(b && b.style.display !== 'none') b.innerHTML = 'TAP TO WAKE<br><small>⚠ ' + String(m).slice(0,90) + ' — screenshot this for Brit</small>';
+  }catch(e){}
+}, true);
+</script>
+<script type="module">
+import { GrowBotWalker } from '/growbot_policy.js';
+import { Walker } from '/growbot_runner.js';
+import { RelayBody } from '/relay-transport.js';
+import {choice as forwardChoice,collector as forwardCollector} from '/forward-choice.mjs?v=1001';
+
+const $=id=>document.getElementById(id);
+const D2R=Math.PI/180, R2D=180/Math.PI;
+const API='/api/gallery', TYPE='policy';
+// Temporary: show ONLY the known-good official walk in the picker. The community list, the
+// upload row and the full-gallery link are HIDDEN, not removed — gallery blobs are write-once
+// and every entry is still in the store. Flip back to true to restore the full picker.
+const SHOW_COMMUNITY=true;    // Brit 0728: back ON for calibration testing — he needs the recent walks
+const COMMUNITY_RECENT=5;     // ...but only the NEWEST few. 28 entries is a wall of near-identical names on a phone; 5 covers everything uploaded this month.
+const qp=new URLSearchParams(location.search);
+// Explicit test link only. No saved preference and no automatic fallback or mid-run mode changes.
+const basicForward=qp.get('forwardbasic')==='1';
+let walker=null, base=null, mode='idle';
+var benchForward=false, forwardPolicy=null, policyGeneration=0;
+var forwardSensors=basicForward?new window.GBForwardBasic.Sensors():forwardCollector();
+forwardSensors.engine=basicForward?window.GBForwardBasic:forwardChoice;
+var forwardRunner=new window.GBTesterForward.Runner({
+ now:function(){return performance.now();}, later:function(f,t){return setTimeout(f,t);}, clear:function(t){clearTimeout(t);},
+ sample:function(){return basicForward?forwardSensors.sample:forwardSensors.sampleFor(forwardRunner.activeEngine);}, event:function(){return basicForward?forwardSensors.event:forwardSensors.eventFor(forwardRunner.activeEngine);}, cal:function(){var c=Object.assign({},cal);try{Object.assign(c,JSON.parse(localStorage.gb_walk_cal||'{}'));}catch(e){throw Error('invalid saved calibration');}return c;},
+ ready:function(){return !!(benchForward&&body&&body.ready&&body.awake&&!document.hidden&&window.GBForwardWalk.flag(location.search)!=='0');},
+ pose:function(l,r){sendLR(l,r);}, release:function(){mode='idle';if(body)body.stop();},
+ status:function(t){$('st').textContent=t;$('ladres').textContent=t;trace(t,'mv');}
+},basicForward?window.GBForwardBasic:forwardChoice);
+if(basicForward){$('nsec').max=5;$('forwardhelp').textContent='Basic forward test: fixed leg rhythm using gravity checks, with no gyro correction. Stock build wiring, SWAP off. Hold still on a clear floor, then try five seconds. Keep STOP within reach. This test does not change the agent.';}
+function policyChoiceUI(){
+ var label=benchForward?(basicForward?'BASIC FORWARD TEST':'SCREEN-FORWARD WALK'):benchSpin?'SPIN':polRef==='official'?'SCREEN-BACKWARD WALK':polName;
+ $('walkn').textContent='RUN '+label; $('ladwalk').textContent=label+' 5 SECONDS'; $('ladtitle').textContent=label;
+ $('forwardstatus').style.display=benchForward?'':'none';
+ $('forwardhelp').style.display=benchForward?'':'none'; $('ladzero').hidden=!benchSpin;
+ $('gn').disabled=benchForward;
+ $('motionhelp').textContent=benchForward&&basicForward?'This test follows a fixed leg rhythm without neural or gyro corrections.':'GrowBot uses neural networks for motion, known as policies. This tab runs one.';
+ $('ladwhy').textContent=benchForward?(basicForward?'Five-second compatibility test. Hold still on the floor until gravity is ready. Use STOP if unstable.':'Toward the screen. Stock two-leg body, SWAP off. Hold still for sensors, then run.'):benchSpin?'Place flat, screen up. Choose a direction, RE-ZERO while still, then run.':'The existing walk travels away from the screen on the stock body. If the legs look off, fix them in the Calibrate tab.';
+ document.querySelectorAll('#quickpolicies button').forEach(function(b){b.classList.toggle('on',b.dataset.policy===polRef);});
+ if(SIMPLE){$('spinhelp').style.display=benchSpin?'':'none';$('spindir').style.display=benchSpin?'flex':'none';}
+}
+var forwardStatusAt=null;
+function forwardSensorStatus(){
+ var now=performance.now();if(forwardStatusAt!==null&&now>=forwardStatusAt&&now-forwardStatusAt<250)return;forwardStatusAt=now;
+ var F=forwardSensors.engine||window.GBForwardWalk;if(F&&F.pick)F=F.pick(forwardSensors.sample,forwardSensors.event);if(!F||typeof F.diagnostic!=="function"){$("forwardstatus").textContent="Sensor details need the updated page. Reload to show them.";return;}
+ var sample=forwardSensors.sample,d=F.diagnostic(sample,now,forwardSensors.sign,forwardSensors.event),o=forwardSensors.o;
+ function axes(bits,names){var missing=names.filter(function(n,i){return bits[i]!==true;});return missing.length?'missing '+missing.join('/'):'ready';}
+ $('forwardstatus').textContent='Gyro: '+axes(d.gyro,['alpha','beta','gamma'])+' | Gravity: '+axes(d.gravity,['x','y','z'])+
+  ' | Sign: '+(forwardSensors.sign?String(forwardSensors.sign):(F.LABEL?'hold still to measure':'measuring ('+forwardSensors.n+'/5)'))+' | Age: '+(d.age===null?'no readings':Math.round(d.age)+' ms')+
+  ' | Orientation: '+(o?Math.round(now-o.t)+' ms old':'no readings')+(F.LABEL?' | Gyro correction: off | Pick-up detection: '+(sample&&sample.linear!==null?'available':'unavailable'):'')+(d.ok?' | ready':' | '+d.message);
+}
+function choosePolicy(ref){
+ var names={screen_forward:'Screen-forward walk',official:'Screen-backward walk','gallery:46181387':'Spin v4'};
+ return loadPolicy(ref,names[ref]||ref).then(function(ok){if(ok){policyChoiceUI();$('gal').classList.remove('show');}});
+}
+
+let benchSpin=false, spinZeroReady=false, motionAt=0, orientationSeen=false;
+var spinDir='right', spinRun=null;   // 0930: RUN SPIN's direction, and the wiring of the spin in progress ({sel, ccw}); see /spin-wire.js
+let steerable=false, accel={x:0,y:0,z:0}, cmd={fwd:0,yaw:0}, imuRot=0;   // steerable: raw accel + cmd; imuRot rotates the phone frame to sim z-up
+let imuFlip=1;   // platform accel convention: canonical = Android (+9.8 on the up axis at rest); iOS reports the OPPOSITE sign — detected by MEASUREMENT at the RUN capture, never by user-agent
+let ori={a:0,b:0,g:0}, rate={a:0,b:0,g:0};
+let frames=0, hzT=0, hzTarget=25, loopIv=null;
+const cal={L_SIGN:-1,R_SIGN:1,L_OFF:0,R_OFF:0,IMU_SIGN:[1,-1,1],gain:1,turn:0};
+try{ Object.assign(cal, JSON.parse(localStorage.gb_walk_cal||'{}')); }catch(e){}
+
+// ── trace panel (brain/log, visible per the spec) ──
+const tEl=$('trace');
+function trace(line,kind){ const d=document.createElement('div'); if(kind)d.className=kind; d.textContent='> '+line; tEl.appendChild(d); while(tEl.childElementCount>140)tEl.removeChild(tEl.firstChild); tEl.scrollTop=tEl.scrollHeight; }
+
+// ── relay transport (the ONE shared module) ──
+let body=null;
+function makeBody(id){
+  forwardRunner.stop('pairing changed');
+  if(body) body.close(); var settled=false;
+  // fire the settle wiggle ONCE the body is both online AND ready — poll briefly so it never
+  // gets skipped by the online-before-ready race (was: only checked at the status instant).
+  const tryWiggle=(tries=0)=>{ if(settled||!body)return;
+    if(body.ready){ settled=true; body.act([{l:84,r:96,ms:200},{l:96,r:84,ms:200},{l:90,r:90,ms:200}],'replace'); trace('settle wiggle (wakes the servos)','mv'); }
+    else if(tries<20) setTimeout(()=>tryWiggle(tries+1),150); };
+  body=new RelayBody(id,{
+    onStatus:a=>{ $('dot').className='dot'+(a?' on':''); $('st').textContent=a?('body "'+id+'" ONLINE — tap RUN WALK'):('no body on "'+id+'" yet — is the Pico dialed into the relay?'); trace(a?'body online':'body offline','net'); if(a)tryWiggle(); },
+    // LINK state (this socket), distinct from chip presence: makes a dropped/reconnecting relay
+    // link visible instead of silently no-oping RUN/STOP until a page refresh.
+    onState:s=>{
+      if(s==='lost'){ $('dot').className='dot lost'; $('st').textContent='link lost — reconnecting…'; trace('relay link lost — reconnecting','net'); }
+      else if(s==='connecting'){ $('dot').className='dot'; }
+      // 'live'/'closed' are reflected by onStatus, which carries chip presence
+    }
+  });
+  body.connect();
+  trace('attaching to "'+id+'"','net');
+}
+
+// which policy: ?policy=official|gallery:<id> (+?name=), else last-loaded, else official
+let _localPolicy = false;   // 0821: true while a policy loaded from a LOCAL FILE is active (never persisted, never re-fetchable)
+var polRef=qp.get('policy')||(window.GBForwardWalk.flag(location.search)==='0'?'official':'screen_forward');
+var polName=polRef==='screen_forward'?'Screen-forward walk':polRef==='official'?'Screen-backward walk':qp.get('name')||polRef;
+$('id').value = qp.get('id') || localStorage.gb_walk_id || 'bench';
+
+function policyUrl(ref){
+  // 'official' = the SIMPLE ladder's 5-second walk AND the load-error fallback. Repointed to
+  // DR-RMA 0728 (Brit bench: policy_official leaned/split — the newbie's first walk must be the
+  // GOOD one, matching what the creature/agent now walks). policy_official.json itself was removed
+  // 0929 (git history has it).
+  if(!ref || ref==='official') return '/policy_drrma.json';
+  return API+'?type='+TYPE+'&id='+encodeURIComponent(ref.replace(/^gallery:/,''))+'&download=1';
+}
+async function loadPolicy(ref,name){
+  var generation=++policyGeneration;
+  forwardRunner.stop('policy changed'); clearTimeout(autoTimer); clearTimeout(restTimer); setMode('idle'); if(body)body.stop();
+  benchForward=false; forwardPolicy=null; walker=null; steerable=false;
+  if(ref==='screen_forward'){
+    $('st').textContent='loading verified forward walk';
+    try{
+      var pjForward=await (basicForward?window.GBForwardWalk:forwardChoice).load(fetch,window.crypto);
+      if(generation!==policyGeneration)return false;
+      forwardPolicy=pjForward; benchForward=true; benchSpin=false; steerable=false; spinRun=null; spinZeroReady=false;
+      polRef=ref;polName=basicForward?'Basic forward test':'Screen-forward walk';_localPolicy=false;hzTarget=25;
+      $('polname').textContent=polName;$('spinhelp').hidden=true;$('spindir').style.display='none';$('steer').style.display='none';$('modes').style.display='none';
+      syncWalk();calEcho();policyChoiceUI();trace('loaded '+window.GBForwardWalk.ID+' (verified SHA, 25 Hz, fixed gain 0.99)'+(basicForward?' - seed-only test, no gyro correction':''),'mv');return true;
+    }catch(e){if(generation===policyGeneration){$('st').textContent='Forward walk unavailable: '+e.message;trace($('st').textContent,'err');}return false;}
+  }
+  let pj;
+  try{ pj=await fetch(policyUrl(ref)).then(r=>{if(!r.ok)throw new Error('http '+r.status);return r.json();}); }
+  catch(e){
+    if(generation!==policyGeneration)return false;
+    if(ref==='official'){ $('st').textContent='couldn’t load the policy ('+e.message+')'; trace('policy load failed: '+e.message,'err'); return; }
+    /* 0826: a 404 means that gallery entry is GONE (curated away / superseded — e.g. spin v2 and v3
+       were both retired). Without clearing the saved pointer the tab 404s on EVERY load forever and
+       silently runs the official walk under a stale name, which reads to the owner as "my policy
+       broke". Transient errors (offline, 5xx) still keep the pointer so a reload returns to it. */
+    if(/http 404/.test(e.message||'')){ try{ delete localStorage.gb_policy_ref; delete localStorage.gb_policy_name; }catch(_){}
+      trace('“'+name+'” is no longer in the gallery — loading the official walk (your saved choice was cleared; pick a new one from Load policy)','err');
+      return loadPolicy('official','DR-RMA walk'); }
+    trace('“'+name+'” failed ('+e.message+') — using official','err'); return loadPolicy('official','DR-RMA walk');
+  }
+  if(generation!==policyGeneration)return false;
+  if(ref==='gallery:46181387'){
+    const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(pj))))).map(x=>x.toString(16).padStart(2,'0')).join('');
+    if(digest!=='fafc9f9c19737febda45129eef876a9865d7f2ce33b5f94102740e03952c8bd9'){ walker=null; $('st').textContent='Spin policy differs from the tested version. Run blocked.'; return false; }
+  }
+  if(generation!==policyGeneration)return false;
+  return applyPolicy(pj, ref==='official'?'Screen-backward walk':name || ref, ref);
+}
+/* 0821 SPLIT so a LOCAL FILE can reuse this verbatim (builder with a redesigned body + his own MJCF
+   wants to test his policy.json without uploading — gallery blobs are write-once, so an experimental
+   upload can never be removed from the public picker). Everything below is exactly what ran after
+   the fetch; `ref` is null for a local file, which is the ONLY behavioural difference. */
+function applyPolicy(pj, name, ref){
+  policyGeneration++; forwardRunner.stop('policy changed'); benchForward=false;forwardPolicy=null;
+  clearTimeout(autoTimer);clearTimeout(restTimer);setMode('idle');if(body)body.stop();
+  // obs_spec present (flat channels OR schema segments) -> generic runner; else classic obs16.
+  const hasSpec = !!(pj.obs_spec && (Array.isArray(pj.obs_spec.channels) || Array.isArray(pj.obs_spec.segments)));
+  try{ walker = hasSpec ? new Walker(pj, cal) : new GrowBotWalker(pj, cal); }
+  catch(err){ walker=null; steerable=false; $('st').textContent='policy rejected: '+err.message; trace('policy rejected: '+err.message,'err'); return false; }   /* 0821b: returns FALSE, it does not throw — so callers must CHECK. The file path used to wrap this in try/catch and, because a swallowed reject looks like success, closed the picker on a policy that never loaded. Worse than a visible failure: _localPolicy stayed false and polRef still pointed at the PREVIOUS gallery policy, so pressing GO would fetch and walk THAT one while the picker had closed as if the file were live. Silent substitution, the same class as the START re-fetch trap. */
+  benchSpin=ref==='gallery:46181387'; spinZeroReady=false; spinRun=null;
+  $('spinhelp').hidden=!benchSpin; $('spindir').style.display=benchSpin?'flex':'none'; $('walkn').textContent=benchSpin?'RUN SPIN':'RUN WALK';
+  $('nsec').max='30'; if(benchSpin)$('nsec').value=Math.min(30,+$('nsec').value||5);
+  steerable = hasSpec;                                   // run-loop flag: rotated accel/gyro + step(A,G,cmd) + accel readouts
+  if(hasSpec && walker.setFrame){ const fo=qp.get('frame'); if(fo) walker.setFrame(fo); }   // ?frame=zup|auto|g2y|g2x — IMU-frame override (else auto-detected from the policy's accel-mean)
+  const hasCmd = hasSpec && walker.usesCmd;              // continuous joystick (cmd_forward/cmd_yaw)
+  const hasMode = hasSpec && walker.usesMode;            // discrete one-hot mode (Harsh steerable: STOP/FWD/LEFT/RIGHT)
+  $('steer').style.display = hasCmd ? 'flex' : 'none';
+  $('modes').style.display = hasMode ? 'flex' : 'none';
+  if(hasMode){ cmd={fwd:0,yaw:0,mode:1}; document.querySelectorAll('#modes .dirb').forEach(b=>b.classList.toggle('on', +b.dataset.mode===1)); }   // default: FORWARD
+  else if(hasCmd){ cmd={fwd:1,yaw:0}; document.querySelectorAll('#steer .dirb').forEach(b=>b.classList.toggle('on', +b.dataset.yaw===0)); }   // default: forward
+  else cmd={fwd:0,yaw:0};
+  setReadoutLabels(hasSpec);
+  /* A local file has no URL, so it must NEVER become the persisted ref: on reload the page re-fetches
+     polRef, and a bogus ref would 404 into the official walk while the label still claimed the local
+     one. _localPolicy also stops wake() re-fetching (it calls loadPolicy(polRef) on START — without
+     this the builder's policy would be silently swapped for the official walk the moment they press
+     go, which is exactly the kind of silent substitution that reads as "my policy doesn't work").
+     localStorage is left untouched, so a reload simply returns to the last GALLERY policy. */
+  _localPolicy = !ref;
+  if(ref){ polRef=ref; localStorage.gb_policy_ref=ref; localStorage.gb_policy_name=name||ref; }
+  polName = name || ref;
+  $('polname').textContent=polName;
+  const chz = Number(pj.control_hz || (pj.obs_spec && pj.obs_spec.control_hz));   // top-level (classic obs16) OR obs_spec (steerable)
+  if(chz>0){ hzTarget = Math.max(15, Math.min(40, Math.round(chz))); syncWalk(); }   // snap the cadence slider to the policy's trained rate (still draggable for testing)
+  trace('policy loaded: '+polName+(hasSpec?(' (obs'+pj.obs_size+(hasMode?', joystick':(hasCmd?', steerable':''))+', frame:'+walker.frame+(walker.up?' up['+walker.up.map(v=>v.toFixed(2)).join(',')+']('+walker.upSource+')':'')+(walker.swap?', legs:swapped':'')+')'):(' (obs'+pj.obs_size+' classic)'))+(chz>0?' · '+hzTarget+'Hz (from policy)':''),'mv');
+  try{ window.pbEpisodes&&pbEpisodes.setProv({model:'none', policy:polName, deploy:'tester-0801ep', consent:'none', surface:'tester', redacted:true}); }catch(e){}
+  policyChoiceUI();
+  return true;   // EPISODES (0801): real-hardware walk surface finally records the motor lane — prov re-stamped per policy load so every window names the policy that drove it
+}
+function setReadoutLabels(s){ $('lb0').textContent=s?'accX':'roll'; $('lb1').textContent=s?'accY':'pitch'; $('lb2').textContent=s?'accZ':'yaw'; }
+
+function wrap(x){ while(x>Math.PI)x-=2*Math.PI; while(x<-Math.PI)x+=2*Math.PI; return x; } // Match the bench: zero tilt must remain zero, never +/-180 degrees.
+// gain · cadence · turn are the live walk feel; signs & trim come from the Manual tab via the shared gb_walk_cal.
+function syncWalk(){
+  if(benchForward){$('gn').value=99;$('gnv').textContent='0.99';return;} // Execution-local. Never persist the forward policy signs or gain.
+  $('gn').value=Math.round(cal.gain*100); $('gnv').textContent=cal.gain.toFixed(1);
+  if(walker) walker.cal=cal;   // cadence/turn sliders removed 0728 — hzTarget follows the policy, cal.turn stays 0
+  // Policy owns only gain/turn — MERGE so we never clobber the Manual tab's signs/trim in the shared key.
+  let shared={}; try{ shared=JSON.parse(localStorage.gb_walk_cal||'{}'); }catch(e){}
+  shared.gain=cal.gain; shared.turn=cal.turn; localStorage.gb_walk_cal=JSON.stringify(shared);
+}
+// Pull the latest Manual-tab calibration (signs + trim) right before a run — the iframes load once,
+// so trim set in Manual after this page loaded would otherwise stay stale here.
+function pullCal(){ try{ Object.assign(cal, JSON.parse(localStorage.gb_walk_cal||'{}')); }catch(e){} if(walker) walker.cal=cal; calEcho(); }
+
+/* ── CALIBRATION ECHO / DIRECTION SELF-CHECK (0727, after the backwards-direction field test) ──
+   Three distinct failure modes made "which way is forward?" unanswerable from this tab:
+     1. gb_walk_cal.SWAP is applied in relay-transport.pose() — i.e. AFTER this page's servo map has
+        already built the L/R differential. Swapping the two servos mirrors the robot, so every
+        DIFFERENTIAL term inverts: the `turn` slider and any policy yaw steer the opposite way,
+        and a 2-leg gait's phase lead reverses. Forward/back looks fine, so it hides.
+     2. Keys can sit in gb_walk_cal that this tab never applies (SWAP is stored+honoured downstream
+        but is not part of this page's servo math; anything else new from the Manual tab is simply
+        dropped) — silently, with no signal that the two tabs disagree.
+     3. The walker holds its OWN cal copy; if pullCal() ever stops re-binding it, the run uses a
+        stale one. So echo walker.cal — what the servos actually got — not the page's intent.
+   The echo renders the EFFECTIVE cal at every pullCal() (RUN WALK and REST both call it), so what
+   you read is what that run used. Mismatches are loud in the UI and re-asserted to the console. */
+const CAL_KEYS=['L_SIGN','R_SIGN','L_OFF','R_OFF','gain','turn'];   // keys THIS tab's servo map consumes
+function calEcho(){
+  const el=$('calecho'); if(!el) return;
+  if(benchForward){
+    var c=forwardRunner.h.cal(),ok=window.GBForwardWalk.select({id:'growbot-85mm-2leg'},c,location.search);
+    el.textContent=ok.on?'Forward: measured phone frame, signs -1/-1, gain 0.99, trims '+c.L_OFF+'/'+c.R_OFF+'. Saved calibration unchanged.':'Forward blocked: '+ok.why+'. Choose backward or use the Calibrate tab.';
+    el.className=ok.on?'':'warn';el.style.display='';return;
+  }
+  let raw={}; try{ raw=JSON.parse(localStorage.gb_walk_cal||'{}'); }catch(e){}
+  const eff=(walker&&walker.cal)?walker.cal:cal;                    // what the servo map will actually read
+  const swap=!!raw.SWAP;
+  // stored-but-never-applied: present in the shared key, not consumed here, and not the
+  // downstream-owned SWAP/IMU_SIGN — i.e. a Manual-tab setting this tab silently ignores.
+  const known=CAL_KEYS.concat(['SWAP','IMU_SIGN']);
+  const ignored=Object.keys(raw).filter(k=>!known.includes(k));
+  // page-vs-walker divergence: the run would use a different number than this tab believes
+  const drift=CAL_KEYS.filter(k=>Number(eff[k])!==Number(cal[k]));
+  const n=v=>(v>0?'+':'')+(+v||0);
+  let h='<b>cal in use</b> · L_SIGN '+n(eff.L_SIGN)+' · R_SIGN '+n(eff.R_SIGN)
+       +' · trim L'+n(eff.L_OFF)+'/R'+n(eff.R_OFF)
+       +' · gain '+(+eff.gain||0).toFixed(2)+' · turn '+n(eff.turn)
+       +' · SWAP <span class="'+(swap?'bad':'ok')+'">'+(swap?'ON':'off')+'</span>';
+  // IMU sign flips reach the policy ONLY on the z-up path. growbot_runner.js forces IMU_SIGN to
+  // [1,1,1] whenever a frame transform is active (frame auto/g2x/g2y), so on those policies the
+  // Manual tab's roll/pitch/yaw toggles change its own readout and nothing else.
+  const imuDropped=!!(walker&&walker.R);
+  const imu=(eff.IMU_SIGN||[1,1,1]).map(v=>v>0?'+':'−').join('');
+  h+=' · IMU '+imu+(imuDropped?' <span class=bad>(NOT applied)</span>':' <span class=ok>(applied)</span>');
+  if(swap) h+='<br><span class=bad>⚠ Left/right legs are SWAPPED, so this walk steers the WRONG WAY.</span> Turning is mirrored (left↔right) because the swap happens after the steering math. Straight-ahead still looks right, which is why this hides. Fix: Calibrate tab → re-run the which-leg test and turn SWAP off.';
+  if(imuDropped) h+='<br><span class=bad>⚠ IMU sign flips do NOT reach this policy</span>: it declares frame:'+walker.frame+', which places the axes itself and overrides the Calibrate tab\'s IMU toggles. Flipping roll/pitch/yaw there will not change this walk; fix direction with L_SIGN/R_SIGN instead.';
+  if(ignored.length) h+='<br><span class=bad>⚠ stored but ignored by this tab: '+ignored.join(', ')+'</span>';
+  if(drift.length)   h+='<br><span class=bad>⚠ walker/page cal drift on: '+drift.join(', ')+' — the run used the walker copy.</span>';
+  if(!Object.keys(raw).length) h+='<br><span class=bad>⚠ gb_walk_cal is EMPTY: nothing was saved in the Calibrate tab, so these are code defaults.</span>';
+  const bad=!!(swap||ignored.length||drift.length||imuDropped);
+  el.innerHTML=h;
+  el.className=bad?'warn':'';
+  // SIMPLE mode is the guided field-test flow: keep the newbie path clean, but never let a real
+  // direction fault stay hidden behind it.
+  el.style.display=(SIMPLE&&!bad)?'none':'';
+  if(swap) trace('SWAP=ON → turn/yaw are mirrored on this tab','err');
+  if(drift.length) trace('cal drift page vs walker: '+drift.join(','),'err');
+  // console assertion — same facts, grep-able from a tethered field session
+  try{
+    console.table(CAL_KEYS.concat(['SWAP']).map(k=>({key:k,
+      stored:(k==='SWAP'?(swap?1:0):(raw[k]===undefined?'(default)':raw[k])),
+      inUse:(k==='SWAP'?(swap?'applied at wire':'—'):eff[k])})));
+    console.assert(!swap,'[growbot] SWAP=ON: turn/yaw are MIRRORED relative to this tab’s servo map');
+    console.assert(!ignored.length,'[growbot] gb_walk_cal keys ignored by policy tab: '+ignored.join(','));
+    console.assert(!drift.length,'[growbot] policy-tab cal drifted from walker.cal: '+drift.join(','));
+    console.assert(!imuDropped,'[growbot] IMU_SIGN is NOT applied: policy frame='+(walker&&walker.frame)+' overrides it (growbot_runner.js forces [1,1,1] when a frame transform is active)');
+  }catch(e){}
+}
+window.addEventListener('storage',e=>{ if(e.key==='gb_walk_cal') pullCal(); });   // Manual tab is a sibling iframe: re-echo the moment it saves
+window.P=function(){ if(benchForward)return; cal.gain=+$('gn').value/100; syncWalk(); restartLoop(); };   // gain only now (cadence/turn sliders removed 0728)
+$('zero').onclick=()=>{
+ if(benchSpin){
+  $('stop').onclick();
+  if(!orientationSeen||performance.now()-motionAt>1000){$('st').textContent='Wait for motion sensors, then re-zero flat.';return;}
+  spinZeroReady=true;
+ }
+ base={...ori}; $('st').textContent=benchSpin?'Flat reference saved · ready to spin':'re-zeroed (this pose = upright/neutral)'; trace(benchSpin?'spin: manual flat reference saved':'re-zeroed upright');
+};
+
+// ── gallery panel (reads the SAME shared /api/gallery store as gallery.html) ──
+$('load').onclick=openGallery;
+$('galclose').onclick=()=>$('gal').classList.remove('show');
+async function openGallery(){
+  $('gal').classList.add('show'); const L=$('glist'); L.innerHTML='loading…';
+  $('uprow').style.display = SHOW_COMMUNITY?'':'none';
+  $('galfull').style.display = SHOW_COMMUNITY?'':'none';
+  let community=[];
+  if(SHOW_COMMUNITY){ try{ const j=await fetch(API+'?type='+TYPE,{cache:'no-store'}).then(r=>r.json()); community=Array.isArray(j.entries)?j.entries:[]; }catch(e){} }
+  L.innerHTML='';
+  [{ref:'screen_forward',name:'1. Screen-forward walk'},{ref:'official',name:'2. Screen-backward walk'},{ref:'gallery:46181387',name:'3. Spin'}].forEach(function(e){
+    var button=document.createElement('button');button.className='gitem pin';button.textContent=e.name;button.onclick=function(){choosePolicy(e.ref);};L.appendChild(button);
+  });
+  // FWD walk (official) HIDDEN from the picker 0728 (Brit: "it always leans, something's broken") —
+  // still the code fallback in loadPolicy, just not offered. DR-RMA is the one that walks well.
+  if(!SHOW_COMMUNITY){
+    const n=document.createElement('div'); n.className='galnote';
+    n.textContent='updated policies coming soon';
+    L.appendChild(n); return;
+  }
+  community = community.filter(e=>e.id!=='99e61ce6'&&e.id!=='f7104439'&&e.id!=='46181387');   // the same walk's gallery entry — don't list it twice
+  // NEWEST FIRST, capped: the store keeps every upload ever, and on a phone the older ones push
+  // the walk you actually want off the screen. Sort by the entry's own timestamp (id order is
+  // not chronological) and keep COMMUNITY_RECENT.
+  community.sort((a,b)=>(+b.created||+b.t||0)-(+a.created||+a.t||0));
+  // CURATED WHITELIST 0728 (Brit bench): show ONLY the walks worth running right now. DR-RMA is the
+  // one good walk → top. Current Walk kept at the BOTTOM to re-test after calibration. Everything
+  // else (mels ×2, Harsh steerable, FWD/official) is HIDDEN for now — they lean/don't work.
+  var _ORDER={ '993924de':0, 'f7104439':1, '46181387':2, 'c7cbc4ae':3, '494029d2':4 };   // spin v4 RESTORED 0911 by request. Status unconfirmed on hardware since hiding (0826) — gyro-axis fix (GYRO-FIX toggle, minimal.html) was found+bench-verified motors-off but never confirmed with a real running spin. Hide again fast if reports repeat.   // OLIE final 154M (top — widest zero-tolerance: walks through -35..+25deg pitch error), DR-RMA (the proven one), narrowBatt v2 (freezes past -20deg pitch error), old walk (bottom). Buggy 'Current Walk' deleted 0728 — action_to_rad was pi/2 (57% overswing) + no control_hz.
+  community = community.filter(function(e){ return _ORDER[e.id]!=null; })
+                       .sort(function(a,b){ return _ORDER[a.id]-_ORDER[b.id]; });
+  const _hidden = 0;
+  if(!community.length){ const d=document.createElement('div'); d.style.cssText='color:var(--mut);font-size:13px'; d.textContent='No community policies yet — upload one below.'; L.appendChild(d); }
+  community.forEach(e=>addItem(L,e));
+  if(_hidden>0){ const n=document.createElement('div'); n.className='galnote'; n.textContent=_hidden+' older walks not shown'; L.appendChild(n); }
+}
+function addItem(L,e){
+  const b=document.createElement('button'); b.className='gitem'+(e.pin?' pin':'');
+  b.innerHTML='<span class=nm><b></b><small></small></span>';
+  b.querySelector('b').textContent = (e.name || 'WALK').toUpperCase();   // TITLE = the policy's name
+  b.querySelector('small').textContent='by '+(e.author||'anon')+(e.description?(' · '+e.description.slice(0,70)):'');
+  if(e.pin){ const x=document.createElement('span'); x.className='badge'; x.textContent='official'; b.appendChild(x); }
+  b.onclick=async()=>{ await loadPolicy(e.pin?'official':('gallery:'+e.id), e.name); $('gal').classList.remove('show'); $('st').textContent='loaded '+(e.name||e.id)+' — tap RUN WALK'; };
+  L.appendChild(b);
+}
+$('upbtn').onclick=async()=>{
+  const m=$('upmsg'); const f=$('upf').files[0], name=$('upn').value.trim(), author=$('upa').value.trim();
+  if(!f){ m.textContent='pick a .json policy first'; return; }
+  if(!name||!author){ m.textContent='name + author required'; return; }
+  let text,p; try{ text=await f.text(); p=JSON.parse(text); }catch(e){ m.textContent='not valid JSON'; return; }
+  if(!Number.isInteger(p.obs_size)||!Array.isArray(p.mean)||!Array.isArray(p.layers)){ m.textContent='not a policy file (need obs_size/mean/layers)'; return; }
+  m.textContent='uploading…';
+  try{
+    const fn=f.name.replace(/[^A-Za-z0-9._-]/g,'-').replace(/(\.json)?$/i,'.json');
+    const r=await fetch(API+'?type='+TYPE,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:TYPE,name,author,files:[{name:fn,text}]})});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok){ m.textContent=j.error||('upload failed '+r.status); return; }
+    m.textContent='added'; trace('uploaded "'+name+'" to the gallery','mv'); openGallery();
+  }catch(e){ m.textContent='network error'; }
+};
+
+/* 0821 RUN A LOCAL POLICY FILE. Read on-device, parsed in the page, never sent anywhere — no
+   /api/gallery call, no network at all. Same three structural checks the upload path uses, so a file
+   that would be rejected on upload is rejected here too and for the same stated reason. Handed to
+   applyPolicy with ref=null, which is what marks it local: not persisted, not re-fetched on START. */
+$('locbtn').onclick = async () => {
+  const m=$('locmsg'), f=$('locf').files&&$('locf').files[0];
+  if(!f){ m.textContent='pick a .json policy first'; return; }
+  let p; try{ p=JSON.parse(await f.text()); }catch(e){ m.textContent='not valid JSON'; return; }
+  if(!Number.isInteger(p.obs_size)||!Array.isArray(p.mean)||!Array.isArray(p.layers)){ m.textContent='not a policy file (need obs_size/mean/layers)'; return; }
+  const nm='local: '+f.name.replace(/\.json$/i,'');   // the label says local everywhere it appears, so it can never be mistaken for a gallery policy
+  m.textContent='loading…';
+  var okd=false;
+  try{ okd=applyPolicy(p, nm, null); }catch(e){ m.textContent='policy rejected: '+e.message; return; }
+  if(!okd){ m.textContent=($('st').textContent||'policy rejected'); return; }   // 0821b: the picker STAYS OPEN on a reject and repeats the runner's own reason, so a file that parses but cannot build a walker can never read as loaded
+  m.textContent='';
+  $('gal').classList.remove('show');
+};
+
+async function wake(){
+  try{
+    const pmo=(window.DeviceMotionEvent&&DeviceMotionEvent.requestPermission)?await DeviceMotionEvent.requestPermission():'granted';
+    const por=(window.DeviceOrientationEvent&&DeviceOrientationEvent.requestPermission)?await DeviceOrientationEvent.requestPermission():'granted';
+    if(pmo!=='granted'||por!=='granted'){ alert('need motion + orientation permission to run the walk policy'); return; }
+  }catch(e){ alert('permission error: '+e.message); return; }
+  if(!_localPolicy) await loadPolicy(polRef, polName);   // 0821: a file-loaded policy is already applied and cannot be re-fetched — re-loading here would silently replace it with the official walk
+  /* Orientation is read RAW (slow but correct). A 0808 attempt to keep it fresh by integrating
+     rotationRate between events REGRESSED the walk: rotationRate is body angular velocity, and Euler
+     rates only equal body rates near zero tilt — this robot sits at ~40°, so the integration drifts
+     and the 5Hz absolute correction cannot catch it. Kept (opt-in) in tester/minimal.html for A/B. */
+  window.addEventListener('deviceorientation',e=>{ forwardSensors.orientation(e,performance.now()); if(e.alpha==null)return; orientationSeen=true; ori={a:e.alpha,b:e.beta,g:e.gamma}; if(!base)base={...ori}; });
+  window.addEventListener('devicemotion',e=>{ forwardSensors.motion(e,performance.now()); motionAt=performance.now(); const rr=e.rotationRate; if(rr) rate={a:rr.alpha||0,b:rr.beta||0,g:rr.gamma||0};
+    const ag=e.accelerationIncludingGravity; if(ag) accel={x:ag.x||0,y:ag.y||0,z:ag.z||0}; });   // raw accel for steerable policies
+  $('start').style.display='none'; $('ui').style.display='flex';
+  if(SIMPLE) ladShow();   // guided ladder replaces the expert controls (same machinery underneath)
+  syncWalk(); pullCal(); connect(); restartLoop();   // pullCal: echo the effective cal before the first run, not after
+  setInterval(()=>{ const now=performance.now(); if(hzT){ $('ihz').textContent=Math.round(frames/((now-hzT)/1000)); } frames=0; hzT=now; }, 1000);
+}
+$('start').addEventListener('click', wake);
+
+function connect(){ const id=($('id').value.trim()||'bench'); localStorage.gb_walk_id=id; makeBody(id); }
+$('id').addEventListener('change',connect);
+
+// modes — the timed RUN WALK is the only walk trigger (hold-to-walk removed: a mid-stride release left the policy mid-gait)
+function setMode(m){ if(m!=='forward')forwardRunner.stop('stopped'); mode=m; }
+
+let autoTimer=null, autoEnd=0, restTimer=null;
+$('walkn').onclick=()=>{
+  if(benchForward){
+    clearTimeout(autoTimer);clearTimeout(restTimer);setMode('idle');if(body)body.stop();
+    try{
+      var F=window.GBForwardWalk,choice=F.select({id:'growbot-85mm-2leg'},forwardRunner.h.cal(),location.search);
+      if(!choice.on)throw Error('Forward blocked: '+choice.why);
+      setMode('forward');forwardRunner.start(forwardPolicy,Math.max(1,Math.min(basicForward?5:30,+$('nsec').value||5)));
+    }catch(e){setMode('idle');$('st').textContent=e.message;$('ladres').textContent=e.message;trace(e.message,'err');}
+    return;
+  }
+  if(!walker){ $('st').textContent='load a policy first'; return; }
+  if(!body||!body.ready){ $('st').textContent='not connected to the relay'; return; }
+  if(benchSpin){
+    if(!body.awake){$('st').textContent='Robot offline — reconnect before running.';return;}
+    if(!spinZeroReady||!orientationSeen||performance.now()-motionAt>1000){$('st').textContent='Place flat, screen up, and press RE-ZERO with sensors active.';return;}
+    pullCal(); clearTimeout(autoTimer); clearTimeout(restTimer); setMode('idle'); body.stop();
+    /* 0930: the agent's spin wiring, from the one shared file (/spin-wire.js): corrected by default, ?spinwire=0 on this
+       page's URL = the pre-0930 wiring, SWAP on = the pre-0930 wiring too (only SWAP off was validated), SWAP on with
+       ?spinwire=1 = refused. gb_walk_cal is never written: the signs and IMU land on the walker's own cal copy, which
+       loop() re-derives every tick from the page cal (so the gain slider still works mid-spin). */
+    var SW=window.GBSpinWire, rawCal={}, sel=null, ccw=spinDir==='left', wd=null;
+    var sgn=function(v){ return (+v>0?'+':'')+(+v||0); };
+    if(!SW){ spinRun=null; $('st').textContent='Spin wiring did not load. Reload this tab.'; trace('spin blocked: /spin-wire.js did not load','err'); return; }
+    try{ rawCal=JSON.parse(localStorage.gb_walk_cal||'{}')||{}; }catch(e){}
+    sel=SW.select({flag:SW.flag(location.search),swap:!!rawCal.SWAP,body:null});
+    if(sel.refuse){ spinRun=null; $('st').textContent='Spin blocked: '+sel.refuse; trace('spin blocked: '+sel.refuse,'err'); return; }
+    try{ wd=SW.apply(walker,sel,ccw); }catch(e){ spinRun=null; $('st').textContent='Spin blocked: '+e.message; trace('spin blocked: '+e.message,'err'); return; }
+    spinRun={sel:sel,ccw:ccw};
+    if(walker.reset)walker.reset();
+    const g=Math.hypot(accel.x,accel.y,accel.z);
+    imuFlip=(g>7&&g<12&&(accel.y+accel.z)<0)?-1:1;
+    imuRot=Math.atan2(accel.y*imuFlip,accel.z*imuFlip);
+    const secs=Math.max(1,Math.min(30,+$('nsec').value||5));
+    cmd={fwd:1,yaw:0,mode:1}; setMode('walk'); autoEnd=performance.now()+secs*1000;
+    $('st').textContent='spinning '+spinDir+' '+secs+'s · flat reference';
+    trace('spin bench start: '+spinDir+' ('+(ccw?'CCW':'CW')+' from above), '+secs+'s, manual flat zero · wire '+wd.wire+' · SWAP '+(rawCal.SWAP?'ON':'off')+' · signs L'+sgn(wd.signs[0])+' R'+sgn(wd.signs[1])+(wd.phoneSigns.length===2&&(wd.phoneSigns[0]!==wd.signs[0]||wd.phoneSigns[1]!==wd.signs[1])?' (stored L'+sgn(wd.phoneSigns[0])+' R'+sgn(wd.phoneSigns[1])+', kept for walk)':'')+' · trim '+sgn(wd.trim[0])+'/'+sgn(wd.trim[1])+' · gain '+cal.gain+' · IMU '+wd.imu.map(sgn).join(',')+' · gyro '+wd.gyro,'mv');
+    if(sel.wire==='legacy_swap') trace('SWAP is on, so this spin runs the old wiring: the corrected one is only tested with SWAP off','err');
+    try{ console.info('[growbot] spin_start '+JSON.stringify(Object.assign({dir:spinDir,swap:rawCal.SWAP?1:0},wd,{secs:secs,gain:cal.gain}))); }catch(e){}
+    autoTimer=setTimeout(()=>{setMode('idle');if(body)body.stop();$('st').textContent='done — '+secs+'s spin';},secs*1000);
+    return;
+  }
+  pullCal();   // apply the latest Manual-tab signs/trim to this walk
+  // AUTO-STANCE (0808 — murf0252's bench discovery, automated): REST ~1.2s so the legs center and the
+  // body settles into its canonical stance, RE-ZERO there, THEN walk. The policies measure tilt
+  // relative to the zero, and training assumes zero = the legs-neutral stance; re-zeroing with the
+  // legs wherever the last walk left them bakes in a 10-20° pitch offset that eats the policy's
+  // tolerance window (measured: old walk ±45°, OLIE −35..+25°, narrowBatt ±20°). STOP aborts the prep.
+  clearTimeout(autoTimer); clearTimeout(restTimer);
+  setMode('rest'); $('st').textContent='stance… (auto REST + re-zero)'; trace('auto: REST → re-zero → walk','mv');
+  restTimer=setTimeout(()=>{
+    if(ori) base={...ori};             // re-zero at the settled stance
+    if(walker.reset) walker.reset();   // cold-start every run: zero the obs-history rings + prev-action + step clock — without this, run #2+ inherits the previous run's tail and A/B tests aren't reproducible
+    if(steerable){
+      // gravity is a free test signal: at the standing capture |accel|≈9.8 and its (y+z) component
+      // must read POSITIVE in the canonical convention — a negative read = iOS-signed accel, flip it.
+      const g=Math.hypot(accel.x,accel.y,accel.z);
+      imuFlip=(g>7&&g<12&&(accel.y+accel.z)<0)?-1:1;
+      if(imuFlip<0) trace('iOS-style accel signs detected → normalized to canonical','mv');
+      imuRot=Math.atan2(accel.y*imuFlip, accel.z*imuFlip); trace('aligned upright → z-up (xrot '+(imuRot*180/Math.PI).toFixed(0)+'°)','mv');   // capture this upright pose so gravity → +Z (AFTER the settle, so it is the true stance)
+    }
+    const secs=Math.max(1,Math.min(30,+$('nsec').value||5));
+    setMode('walk'); autoEnd=performance.now()+secs*1000; trace('walk: run '+secs+'s','mv');
+    const tick=()=>{ const left=Math.max(0,(autoEnd-performance.now())/1000); $('st').textContent='walking '+left.toFixed(1)+'s…'; };
+    tick(); const iv=setInterval(tick,200);
+    autoTimer=setTimeout(()=>{ clearInterval(iv); setMode('idle'); if(body)body.stop(); $('st').textContent='done — '+secs+'s walk, legs limp'; trace('walk done ('+secs+'s)','mv'); }, secs*1000);
+  }, 1200);
+};
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&(benchSpin||benchForward))$('stop').onclick();});
+window.addEventListener('pagehide',function(){forwardRunner.stop('page hidden');});
+$('rest').onclick=()=>{ pullCal(); clearTimeout(autoTimer); clearTimeout(restTimer); setMode('rest'); $('st').textContent='REST — centering, limps in 2s'; trace('rest (neutral 90 → auto-limp 2s)','mv');
+  restTimer=setTimeout(()=>{ setMode('idle'); if(body)body.stop(); $('st').textContent='idle — legs limp (rest released)'; trace('rest auto-released → limp','mv'); }, 2000); };
+$('stop').onclick=()=>{ clearTimeout(autoTimer); clearTimeout(restTimer); setMode('idle'); if(body)body.stop(); $('st').textContent='STOP — silent, legs limp via dead-man'; trace('STOP','mv'); };
+
+// ── steerable direction presets: pick BEFORE you RUN; the timed walk uses the chosen cmd (no touching the moving phone) ──
+document.querySelectorAll('#steer .dirb').forEach(b=>b.onclick=()=>{
+  cmd={ fwd:+(b.dataset.fwd||1), yaw:+b.dataset.yaw };
+  document.querySelectorAll('#steer .dirb').forEach(x=>x.classList.toggle('on', x===b));
+  trace('direction: '+b.textContent.trim());
+});
+// ── spin direction (0930): pick BEFORE you RUN SPIN; the wiring for each direction comes from /spin-wire.js ──
+document.querySelectorAll('#spindir .dirb').forEach(function(b){ b.onclick=function(){
+  spinDir=b.dataset.dir==='left'?'left':'right';
+  document.querySelectorAll('#spindir .dirb').forEach(function(x){ x.classList.toggle('on', x===b); });
+  trace('spin direction: '+spinDir);
+}; });
+// ── discrete joystick modes (Harsh steerable): pick BEFORE you RUN; one-hot fed to the policy ──
+document.querySelectorAll('#modes .dirb').forEach(b=>b.onclick=()=>{
+  cmd={ fwd:0, yaw:0, mode:+b.dataset.mode };
+  document.querySelectorAll('#modes .dirb').forEach(x=>x.classList.toggle('on', x===b));
+  trace('mode: '+b.textContent.trim());
+});
+
+function sendLR(l,r){ l=Math.max(0,Math.min(180,l)); r=Math.max(0,Math.min(180,r)); $('il').textContent=l.toFixed(0); $('irr').textContent=r.toFixed(0); if(body){ body.pose(l,r); frames++; } }
+
+// Self-correcting fixed-rate loop (per Harsh): measure each step's work and sleep only the
+// remainder, so the control rate actually HOLDS at hzTarget. setInterval drifts, coalesces, and
+// ignores loop() cost — and the rate matters: a policy trained at a given control_hz has feedback
+// dynamics that assume that dt (running 25Hz at 30Hz changes the gait).
+function restartLoop(){
+  if(loopIv){ clearTimeout(loopIv); loopIv=null; }
+  const tick=()=>{ const t0=performance.now(); if(benchForward)forwardSensorStatus(); loop(); loopIv=setTimeout(tick, benchSpin ? 1000/hzTarget : Math.max(0, 1000/hzTarget - (performance.now()-t0))); };
+  tick();
+}
+function epMotor(imu,out){ try{ window.pbEpisodes&&pbEpisodes.motor([imu.roll,imu.pitch,imu.yaw,imu.gr,imu.gp,imu.gy],(out.action&&out.action.length?[out.action[0],out.action[1]]:null),[out.l,out.r]); }catch(e){} }   // EPISODES (0801): same shape as v2:1823/v3:1852 — euler obs + raw action + servo degrees; ring-buffered to 1Hz windows, fail-safe
+function loop(){
+  if(!base) base={...ori};
+  const roll=wrap((ori.g-base.g)*D2R), pitch=wrap((ori.b-base.b)*D2R), yaw=wrap((ori.a-base.a)*D2R);
+  const imu={ roll, pitch, yaw, gr:rate.g*D2R, gp:rate.b*D2R, gy:rate.a*D2R };
+  let A={x:accel.x*imuFlip, y:accel.y*imuFlip, z:accel.z*imuFlip}, G={x:rate.g*D2R, y:rate.b*D2R, z:rate.a*D2R};   // imuFlip canonicalizes iOS-signed accel; rotationRate is spec-consistent across platforms (unverified on real iOS — the wiggle self-test will cover it)
+  if(steerable && imuRot && walker.usesAccel){ const ca=Math.cos(imuRot), sa=Math.sin(imuRot);   // Rx(imuRot): rotate phone accel/gyro into the sim's z-up frame
+    A={x:accel.x*imuFlip, y:(accel.y*imuFlip)*ca-(accel.z*imuFlip)*sa, z:(accel.y*imuFlip)*sa+(accel.z*imuFlip)*ca};   // ⚠ imuFlip was applied on the line above and then THROWN AWAY here (0728 audit): imuRot itself is measured from FLIPPED values at the capture, so feeding raw ones back in rotated an iOS phone's gravity upside-down and the walker balanced against an inverted world. Byte-identical when imuFlip=+1 (every Android); on iOS it now lands gravity on +Z as intended.
+    G={x:G.x, y:G.y*ca-G.z*sa, z:G.y*sa+G.z*ca}; }
+  if(steerable){ $('ir').textContent=A.x.toFixed(1); $('ip').textContent=A.y.toFixed(1); $('iy').textContent=A.z.toFixed(1); }
+  else { $('ir').textContent=(roll*R2D).toFixed(0); $('ip').textContent=(pitch*R2D).toFixed(0); $('iy').textContent=(yaw*R2D).toFixed(0); }
+  { // dominant gravity axis, RAW phone frame (pre-rotation) — bench/debug aid for trainers
+    const g=[['x',accel.x],['y',accel.y],['z',accel.z]].sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]))[0];
+    $('igrav').textContent = Math.abs(g[1])<2 ? '—' : (g[1]>0?'+':'−')+g[0].toUpperCase()+' '+Math.abs(g[1]).toFixed(1);
+  }
+  if(mode==='walk'){ if(!walker) return;
+    if(benchSpin&&spinRun&&window.GBSpinWire){ walker.cal=window.GBSpinWire.spinCal(cal,spinRun.sel); G=window.GBSpinWire.gyro(spinRun.sel,rate,D2R); }   // 0930: this spin's wiring every tick. Legacy = the page cal itself and the pre-0930 gyro {x:gamma,y:beta,z:alpha}, byte-identical to before
+    if(steerable){ const out=walker.step(A, G, cmd, imu); sendLR(out.l,out.r); epMotor(imu,out); }   // imu = base-relative euler (rad) for euler_* policies (Harsh obs80); ignored by accel-only policies
+    else { const out=walker.step(imu); sendLR(out.l,out.r); epMotor(imu,out); }
+  }
+  else if(mode==='rest'){ sendLR(90+cal.L_OFF, 90+cal.R_OFF); }
+  // idle: send nothing -> firmware dead-man limps within 500ms
+}
+
+/* ── SIMPLE-mode guided ladder (0715): a friendly front onto the SAME machinery. Rung 1's swap
+      answer writes gb_walk_cal.SWAP (the key relay-transport already reads everywhere), rung 2
+      IS the real RUN WALK. The calibration was always shared through gb_walk_cal, so there is nothing
+      to hand off. Expert mode leaves this page byte-identical in behavior. ── */
+const SIMPLE=(function(){ try{ return (localStorage.gb_ui_mode||'simple')!=='expert'; }catch(e){ return true; } })();
+let lad={walk:0}; try{ Object.assign(lad,JSON.parse(localStorage.gb_ladder_policy||'{}')); }catch(e){}
+function ladSave(){ try{ localStorage.gb_ladder_policy=JSON.stringify(lad); }catch(e){} }
+function ladPaint(){ $('ladr').className='rung '+(lad.walk?'done':'live'); $('ladn').textContent=lad.walk?'✓':'→'; }
+function ladShow(){
+  // #calecho is exempt: calEcho() owns its own visibility here and shows it ONLY when something is
+  // actually wrong, so a direction mismatch still reaches the guided (field-test) flow.
+  document.querySelectorAll('.wrap>*').forEach(el=>{ if(el.id!=='ladder'&&el.id!=='quickpolicies'&&el.id!=='forwardhelp'&&el.id!=='forwardstatus'&&el.id!=='calecho'&&!el.classList.contains('top')) el.style.display='none'; });
+  $('ladder').style.display='flex'; ladPaint(); calEcho();policyChoiceUI();
+}
+$('ladwalk').onclick=()=>{ if(!body||!body.ready){ $('ladres').textContent='no body yet, check the pairing code above'; return; }
+  if(!walker&&!benchForward){ $('ladres').textContent='the walk policy is still loading, give it a moment'; return; }
+  $('nsec').value=5; $('ladask').classList.remove('show'); $('ladres').textContent='walking 5s…';
+  $('walkn').onclick();
+  if(benchForward)return;
+  setTimeout(()=>{ $('ladres').textContent='how did it look?'; $('ladask').classList.add('show'); },5600); };
+document.querySelectorAll('#quickpolicies button').forEach(function(b){b.onclick=function(){choosePolicy(b.dataset.policy);};});
+$('ladstop').onclick=function(){$('stop').onclick();};
+$('ladzero').onclick=function(){$('zero').onclick();};
+$('ladyes').onclick=()=>{ lad.walk=1; ladSave(); ladPaint(); $('ladres').textContent='nice, that\'s the walk.'; $('ladask').classList.remove('show'); };
+$('ladno').onclick=()=>{ lad.walk=1; ladSave(); ladPaint(); $('ladres').textContent='saved anyway. go back to Calibrate to fix the legs, then walk again here.'; $('ladask').classList.remove('show'); };
+$('lesc').onclick=()=>{ try{ localStorage.gb_ui_mode='expert'; }catch(e){}
+  if(window.parent!==window) parent.postMessage({gb:'mode',mode:'expert'},'*');
+  document.querySelectorAll('.wrap>*').forEach(el=>{ el.style.display=''; }); $('ladder').style.display='none';policyChoiceUI(); };
+</script></body></html>
