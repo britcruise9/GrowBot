@@ -53,8 +53,12 @@ function requestFollow(){
 }
 $('follow').onchange=()=>{if(!$('follow').checked)disarm('Follow off — legs released');else requestFollow();};
 addEventListener('pagehide',()=>disarm('Page closed — follow stopped'));document.addEventListener('visibilitychange',()=>{if(document.hidden)disarm('Page hidden — follow stopped');});
-function makeBody(id){disarm('Body connection changed — enable follow when ready');if(body)body.close();body=null;if(!id){$('st').textContent='Enter your robot’s pairing code';return;}let wasOnline=false;const next=new RelayBody(id,{onStatus:a=>{if(body!==next)return;if(!a&&wasOnline)disarm('Body offline — enable follow after reconnecting');if(a)wasOnline=true;$('dot').className='dot'+(a?' on':'');trace(a?'body online':'body offline');}});body=next;body.connect();}
+function makeBody(id){disarm('Body connection changed — enable follow when ready');if(body)body.close();body=null;if(!id||LOOK){$('st').textContent=LOOK?'No robot connected. Connect a robot to use this.':'Enter your robot’s pairing code';return;}let wasOnline=false;const next=new RelayBody(id,{onStatus:a=>{if(body!==next)return;if(!a&&wasOnline)disarm('Body offline — enable follow after reconnecting');if(a)wasOnline=true;$('dot').className='dot'+(a?' on':'');trace(a?'body online':'body offline');}});body=next;body.connect();}
 $('id').value=qp.has('id')?(qp.get('id')||''):localStorage.gb_walk_id||'';
+// 10-14 skip (no robot): face.html hands a look (?id=&look=1) on to here when no Face setup is saved. Same rule as
+// face.html: look=1 means no robot at all, so no code, a locked field, and makeBody below never opens a relay.
+const LOOK=qp.get('look')==='1';
+if(LOOK){$('id').value='';$('id').disabled=true;$('id').placeholder='no robot connected';}
 $('id').addEventListener('change',()=>{const firstPair=!body&&wantFollow;const id=$('id').value.trim();if(id)localStorage.gb_walk_id=id;makeBody(id);if(firstPair&&body)requestFollow();});
 
 const video=$('vid'), ov=$('ov'), ctx=ov.getContext('2d');

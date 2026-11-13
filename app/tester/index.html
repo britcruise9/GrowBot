@@ -52,6 +52,9 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--
 .stage{flex:1;position:relative;background:var(--bg)}
 iframe{position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;border:0;background:var(--bg)}
 .hide{display:none}
+/* skip (no robot), 10-14: the one line that says these tabs have nothing to drive */
+.look{padding:7px 10px;font-size:12px;color:var(--mut);background:#0a121c;border-bottom:1px solid var(--line);text-align:center;line-height:1.5}
+.look .link{color:var(--teal);font-size:12px;padding:0 4px}
 </style></head><body>
 <div class=app>
 
@@ -59,7 +62,9 @@ iframe{position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;bo
  <div class="screen show" id=fork>
    <div class=h>Calibration (optional)</div>
    <div class=sub>Check or fine-tune a robot you've built. GrowBot pairs and wakes on its own, so you don't need this to wake it.</div>
-   <button class="big robot" id=wrobot>Connect robot<small>leg trim · walk test · face direction · LLM</small></button>
+   <button class="big robot" id=wrobot>Connect robot<small>leg trim · walk test · face direction</small></button>
+   <!-- 1026: the manual arm page, for a robot carrying arm_body.py (body-docs "Add an arm"). Its own page, not a tab: it asks for the code itself and reads the one remembered here -->
+   <a class=link href="/tester/arm.html">Added a servo arm? Open the arm controls</a>
  </div>
 
  <!-- ② CONNECT handshake (robot only) -->
@@ -70,6 +75,7 @@ iframe{position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;bo
    <div id=cstat><span class="cdot" id=cdot></span><span id=cmsg>enter your robot's pairing code</span></div>
    <div id=chs></div>
    <button class=cbtn id=cgo disabled>enter a code to connect</button>
+   <button class=link id=cskip>skip (no robot)</button>
    <button class=link id=cback>back</button>
    <a class=link href="/build3.html">No robot yet? Start with the build guide</a>
  </div>
@@ -91,23 +97,23 @@ iframe{position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;bo
      <small id=rstat>relay</small>
      <div class=seg><button id=segS>SIMPLE</button><button id=segE>EXPERT</button></div>
    </div>
+   <div class=look id=look hidden>No robot connected: look around only.<button class=link id=lookgo>connect a robot</button></div>
    <div class=tabs id=tabs>
      <button class="tab on" data-i=0>Calibrate</button>
      <button class=tab data-i=1>Move</button>
-     <button class=tab data-i=2>LLM</button>
-     <button class=tab data-i=3>Face</button>
-     <button class=tab data-i=4>🔌</button>
+     <button class=tab data-i=2>Face</button>
+     <button class=tab data-i=3>🔌</button>
    </div>
    <div class=stage id=stage>
      <iframe id=f0 class=hide allow="autoplay; microphone; camera; gyroscope; accelerometer; magnetometer; fullscreen" allowfullscreen></iframe>
      <iframe id=f1 class=hide allow="autoplay; microphone; camera; gyroscope; accelerometer; magnetometer; fullscreen" allowfullscreen></iframe>
      <iframe id=f2 class=hide allow="autoplay; microphone; camera; gyroscope; accelerometer; magnetometer; fullscreen" allowfullscreen></iframe>
      <iframe id=f3 class=hide allow="autoplay; microphone; camera; gyroscope; accelerometer; magnetometer; fullscreen" allowfullscreen></iframe>
-     <iframe id=f4 class=hide allow="autoplay; microphone; camera; gyroscope; accelerometer; magnetometer; fullscreen" allowfullscreen></iframe>
    </div>
  </div>
 
 </div>
+<script src="/trim-store.js"></script>
 <script type="module">
 import { RelayBody } from '/relay-transport.js';   // shared transport — the handshake discovers the chip with it
 const $=id=>document.getElementById(id);
@@ -123,7 +129,8 @@ function screen(name){ document.querySelectorAll('.screen').forEach(s=>s.classLi
 // sets trim and step 09's scan opens GrowBot itself, so nothing here is needed to wake it. This page no
 // longer hosts a creature in any iframe: the old "skip (no robot)" phone lane and the 🌱 Agent tab (both
 // embedded /v3/next.html) are gone. A robot owner who wants GrowBot gets ONE plain top-level link on the
-// picker (#pkopen), and a person with no robot is pointed at the build guide.
+// picker (#pkopen), and a person with no robot is pointed at the build guide. 10-14: "skip (no robot)" is
+// back, as a LOOK at these same tabs with nothing to drive (see ②c below), never a creature.
 $('wrobot').onclick=()=>{ $('cid').value=devId; screen('connect'); startProbe(); };
 
 // ── ② CONNECT handshake: attach to the relay, wait for the chip, wiggle to confirm, then enter ──
@@ -137,30 +144,46 @@ function noCode(){ online=false; $('cdot').className='cdot'; $('cmsg').textConte
 function startProbe(){
   stopProbe(); devId=$('cid').value.trim().toLowerCase();   // codes are lowercase hex off machine.unique_id(); phone keyboards auto-capitalize and the relay's idFromName is case-sensitive, so "Gb-a3f9c1" silently opens a DIFFERENT empty room and sits at "searching…" forever
   if(!devId){ noCode(); return; }                                 // no code yet → wait for one (don't default to a shared id)
-  try{ localStorage.setItem('gb_walk_id',devId); }catch(e){}
+  // Preserve the old robot's legacy trim before remembering a different code.
+  try{ if(!window.GBTrimStore)throw Error('trim helper'); const t=window.GBTrimStore.boot(localStorage,devId,localStorage.getItem('gb_walk_id'),null,null);if(t.boot&&t.boot.err)throw Error('trim storage');localStorage.setItem('gb_walk_id',devId); }
+  catch(e){ noCode();$('cmsg').textContent='Could not load this robot’s trim. Reload and try again.';return; }
   setOnline(false);
   probe=new RelayBody(devId,{ onStatus:a=>setOnline(!!a) });
   probe.connect();
 }
 function stopProbe(){ if(probe){ try{ probe.close(); }catch(e){} probe=null; } }
 $('cid').addEventListener('change',startProbe);
+let enterT=null;
 $('cgo').onclick=()=>{
   if(!online||!probe) return;
   // the handshake wiggle: legs sweep left then right then center — "I'm connected"
   $('cgo').disabled=true; $('cgo').textContent='wiggling…';
   try{ probe.act([{l:120,r:60,ms:260},{l:60,r:120,ms:260},{l:90,r:90,ms:240}],'replace'); }catch(e){}
-  setTimeout(enterRobot, 900);   // let the wiggle play, then hand off to the remotes
+  enterT=setTimeout(enterRobot, 900);   // let the wiggle play, then hand off to the remotes
 };
 $('cback').onclick=()=>{ stopProbe(); screen('fork'); };
 
-// ── ②b PICKER: 🎛 Calibrate & test (tabs 0-3), 🔌 Custom agent (tab 4), or leave for GrowBot itself ──
+// ── ②c SKIP (no robot), 10-14 (Brit: "so I can look at it on desktop"). Not the 0909 skip, which called the
+// picker and dead-ended for want of a code, and not the phone lane 10-06 removed: no creature, no /v3/.
+// It opens the same tab bar with devId blanked, so srcFor hands every tab an explicit EMPTY ?id=, which each
+// tab page reads as "no robot": no relay, no saved code, no 'bench', no motion. The handshake socket is
+// closed first (and a wiggle's pending hand-off cancelled) and no beacon goes out (a look is not a pair). The
+// pairing field and the saved code are left as they were, so "connect a robot" (and home, via enterRobot) go
+// back to the field and startProbe re-reads the code from there.
+let look=false;
+$('cskip').onclick=()=>{ clearTimeout(enterT); stopProbe(); look=true; devId=''; enterTabs(0); };
+function leaveLook(){ look=false; $('look').hidden=true; screen('connect'); startProbe(); }
+$('lookgo').onclick=()=>{ teardown(cur); cur=-1; leaveLook(); };
+
+// ── ②b PICKER: 🎛 Calibrate & test (tabs 0-2), 🔌 Custom agent (tab 3), or leave for GrowBot itself ──
 // GrowBot with this robot: the same address the old 🌱 Agent tab framed, minus the cache-bust, opened
 // top-level in this tab (never an iframe). Only with a code; hidden otherwise, so it can never open a
 // legs-mode GrowBot for a robot nobody named.
 function openLink(){ const a=$('pkopen');
-  if(devId){ a.href='/v3/next.html?id='+encodeURIComponent(devId)+'&mode=legs'; a.hidden=false; }
+  if(devId){ a.href='/v3/next.html?id='+encodeURIComponent(devId)+'&mode=legs'+(qp.getAll('stockdir').indexOf('0')>=0?'&stockdir=0':''); a.hidden=false; }
   else { a.removeAttribute('href'); a.hidden=true; } }
 function enterRobot(){
+  if(look){ leaveLook(); return; }   // 10-14: a look has no robot and so no picker; home goes back to the pairing field
   stopProbe();                   // CLOSE the handshake socket BEFORE anything mounts (one relay writer at a time)
   // NO CODE, NO PICKER. `devId||'bench'` printed "Who drives bench?" at a person with no robot, which
   // is both meaningless and a leftover of the F-29 shared-room bug where an empty id really did mount
@@ -174,20 +197,25 @@ function enterRobot(){
 }
 function enterTabs(i){
   $('rid').textContent=devId;
+  $('look').hidden=!look; $('rstat').textContent=look?'no robot':'relay';   // a look says so above every tab
   screen('robot');
   show(i);
 }
-$('pkphone').onclick=()=>enterTabs(0);   // 🎛 Calibrate & test lands on the Calibrate tab, with the tab bar
-$('pkcustom').onclick=()=>enterTabs(4);  // 🔌 Custom agent = external-brain surface (/tester/custom.html): paste an OpenAI-compatible local endpoint, or dial in your own script. Docs name it "Custom agent" (agent-docs.html, LOCAL_MODELS.md).
+$('pkphone').onclick=()=>{ look=false; enterTabs(0); };   // 🎛 Calibrate & test lands on the Calibrate tab, with the tab bar
+$('pkcustom').onclick=()=>{ look=false; enterTabs(3); };  // 🔌 Custom agent = external-brain surface (/tester/custom.html): paste an OpenAI-compatible local endpoint, or dial in your own script. Docs name it "Custom agent" (agent-docs.html, LOCAL_MODELS.md).
 $('pkback').onclick=()=>{ screen('fork'); };
 
 // ── ③ ROBOT remotes (lazy single-writer iframes — reused from the tester shell) ──
 function srcFor(i){ const q='?id='+encodeURIComponent(devId)+'&_v='+Date.now();   // ABSOLUTE paths + cache-bust so a fresh deploy always loads
-  return [ '/tester/motor.html'+q, '/tester/policy.html'+q+(qp.get('forwardbasic')==='1'?'&forwardbasic=1':''), '/tester/llm.html'+q, '/tester/face.html'+q, '/tester/custom.html'+q ][i]; }   // 0=Calibrate (motor.html) 1=Move (policy.html) 2=LLM 3=Face (face-track) 4=🔌 Custom agent (agent-gateway). No tab hosts GrowBot itself (10-06). Iframes carry mic/camera/IMU allow + ?id=devId.
+  return [ '/tester/motor.html'+q, '/tester/policy.html'+q+(qp.get('forwardbasic')==='1'?'&forwardbasic=1':'')+(qp.getAll('stockdir').indexOf('0')>=0?'&stockdir=0':''), '/tester/face.html'+q, '/tester/custom.html'+q ][i]; }   // 0=Calibrate (motor.html) 1=Move (policy.html) 2=Face (face-track) 3=🔌 Custom agent (agent-gateway). No tab hosts GrowBot itself (10-06). The LLM tab went 10-14 (Brit: "it's 401'ing anyway"); llm.html stays on disk, unlinked. Iframes carry mic/camera/IMU allow + ?id=devId.
 let cur=-1;
-function mount(i){ if(!devId){ try{ console.warn('growbot: no pairing code — refusing to mount a remote'); }catch(e){} noCode(); cur=-1; screen('connect'); return; }   /* 0903 F-29: srcFor used to fall back to id='bench' when devId was empty, mounting the customer into a SHARED relay room where a stranger could drive their robot and vice versa (the relay accepts any attach: worker.js phase-5 auth is still a TODO). Refuse and send them back to the pairing field, which is one step away.
-     0909 (spinal, "Am I supposed to have a blank page?"): THE REFUSAL WAS RIGHT AND THE RECOVERY WAS BROKEN, in two places. (1) It called screen('robot') — the screen the person is ALREADY on, whose stage is six empty iframes — while noCode() wrote "enter your robot's pairing code" into #cmsg, which lives on the #connect screen this line then HIDES. So the guard explained itself to a screen nobody could see and left a black page. The pairing field is #connect; say so. (2) show() sets cur=i BEFORE calling mount(), so a refused tab still owned `cur` — and show()'s `if(i===cur) return` then swallowed the retry, leaving Calibrate blank even AFTER the person paired correctly. Releasing cur is what makes the second attempt work without a reload. Both halves are needed; either one alone still ends in a blank stage. */
-  const f=$('f'+i); f.src=srcFor(i); f.classList.remove('hide'); }
+function mount(i){ if(!devId){ if(!look){ try{ console.warn('growbot: no pairing code — refusing to mount a remote'); }catch(e){} noCode(); cur=-1; screen('connect'); return; } }   /* 0903 F-29: srcFor used to fall back to id='bench' when devId was empty, mounting the customer into a SHARED relay room where a stranger could drive their robot and vice versa (the relay accepts any attach: worker.js phase-5 auth is still a TODO). Refuse and send them back to the pairing field, which is one step away.
+     0909 (spinal, "Am I supposed to have a blank page?"): THE REFUSAL WAS RIGHT AND THE RECOVERY WAS BROKEN, in two places. (1) It called screen('robot') — the screen the person is ALREADY on, whose stage is six empty iframes — while noCode() wrote "enter your robot's pairing code" into #cmsg, which lives on the #connect screen this line then HIDES. So the guard explained itself to a screen nobody could see and left a black page. The pairing field is #connect; say so. (2) show() sets cur=i BEFORE calling mount(), so a refused tab still owned `cur` — and show()'s `if(i===cur) return` then swallowed the retry, leaving Calibrate blank even AFTER the person paired correctly. Releasing cur is what makes the second attempt work without a reload. Both halves are needed; either one alone still ends in a blank stage.
+     10-14: the ONE exception is a look (skip, no robot): devId is '' on purpose there and every tab gets an explicit EMPTY ?id=, which the tab pages read as no robot. Outside a look, an empty code still mounts nothing.
+     10-14: EXPERT reaches the tab as &ui=expert, for this visit only (see the SIMPLE/EXPERT block below).
+     10-14: a look also adds &look=1. Face reads an explicit empty ?id= as "type a code" (its own setup flow lands there
+     after a cleared field), so it locks its code field only on look=1; the other tabs lock on the empty id alone. */
+  const f=$('f'+i); f.src=srcFor(i)+(uiM==='expert'?'&ui=expert':'')+(look?'&look=1':''); f.classList.remove('hide'); }
 function teardown(i){ if(i<0) return; const f=$('f'+i); f.src='about:blank'; f.classList.add('hide'); }
 function show(i){
   if(i===cur) return;
@@ -197,29 +225,31 @@ function show(i){
   /* 0811 CAMERA HANDOFF (a tester's frozen wake-frame): iOS WebKit releases a destroyed
      document's camera LAZILY — a getUserMedia issued during that window can return a track that
      delivers a few frames then mutes forever (the agent woke, saw one picture of the tester, froze on
-     it). Leaving the camera-holding tab (3=Face, the only one since the Agent tab went 10-06) waits
-     350ms before mounting the next, so the claim lands after the release. */
-  if(prev===3){ setTimeout(()=>{ if(cur===i) mount(i); },350); }
+     it). Leaving the camera-holding tab (2=Face since the LLM tab went 10-14, the only one since the
+     Agent tab went 10-06) waits 350ms before mounting the next, so the claim lands after the release. */
+  if(prev===2){ setTimeout(()=>{ if(cur===i) mount(i); },350); }
   else mount(i);
 }
 document.querySelectorAll('#tabs .tab').forEach(t=>{
   t.addEventListener('click',()=>{ show(+t.getAttribute('data-i')); });
 });
 
-// ── SIMPLE/EXPERT ui mode (0715): global toggle, persisted per device; the Policy/LLM iframes
-//    read localStorage.gb_ui_mode on load (simple = guided ladder, expert = the full remotes).
-//    Flipping remounts the open tab so it re-reads the mode. Default = simple (launch is
-//    newbie-first; DIYers flip once and it sticks). ──
-function uiMode(){ try{ return localStorage.gb_ui_mode||'simple'; }catch(e){ return 'simple'; } }
+// ── SIMPLE/EXPERT ui mode (0715): global toggle (simple = guided ladder, expert = the full remotes).
+//    Flipping remounts the open tab so it re-reads the mode. 10-14 (Brit: "always default to simple mode
+//    for all tabs"): it is no longer persisted. It lives in uiM for this visit only, so every load starts
+//    SIMPLE, and a tab learns EXPERT from the &ui=expert that mount() adds to its address. Nothing writes
+//    localStorage.gb_ui_mode any more (it used to stick on a phone forever once someone picked expert). ──
+let uiM='simple';
+function uiMode(){ return uiM; }
 function paintMode(){ const m=uiMode(); $('segS').classList.toggle('on',m!=='expert'); $('segE').classList.toggle('on',m==='expert'); }
-function setUiMode(m){ try{ localStorage.gb_ui_mode=m; }catch(e){} paintMode();
+function setUiMode(m){ uiM=m==='expert'?'expert':'simple'; paintMode();
   if(cur>=0){ const i=cur; teardown(cur); cur=-1; show(i); } }
 $('segS').onclick=()=>setUiMode('simple');
 $('segE').onclick=()=>setUiMode('expert');
 paintMode();
-window.addEventListener('message',e=>{ const d=e.data||{};   // 'mode' is the only message: there is no agent tab to launch since 10-06, so an old ladder's launch post does nothing (it used to show(4), now 🔌)
-  if(d.gb==='mode'&&d.mode){ try{ localStorage.gb_ui_mode=d.mode; }catch(_){} paintMode(); } });   // in-page escape link keeps the seg honest
-$('rhome').onclick=()=>{ teardown(cur); cur=-1; enterRobot(); };   // home = this robot's picker, where Open GrowBot lives (its back goes on to the fork). It used to drop to the fork, so the link was a whole re-handshake away from the tabs.
+window.addEventListener('message',e=>{ const d=e.data||{};   // 'mode' is the only message: there is no agent tab to launch since 10-06, so an old ladder's launch post does nothing (it used to show(4), now nothing)
+  if(d.gb==='mode'&&d.mode){ uiM=d.mode==='expert'?'expert':'simple'; paintMode(); } });   // in-page escape link keeps the seg honest (the page already switched itself; the next mount carries it)
+$('rhome').onclick=()=>{ teardown(cur); cur=-1; enterRobot(); };   // home = this robot's picker, where Open GrowBot lives (its back goes on to the fork). It used to drop to the fork, so the link was a whole re-handshake away from the tabs. In a look (skip, no robot) there is no robot and no picker, so enterRobot sends home back to the pairing field it came from.
 
 // deep-link: ?go=robot jumps straight to pairing (build step 09's optional link, ESP32 guide). ?id= prefills the code.
 const go=qp.get('go');

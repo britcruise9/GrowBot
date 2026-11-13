@@ -15,20 +15,24 @@
   var SPEEDS=[1,.75,.5];
   function profile(k){var mo=2000/k,se=mo+3000;return {k:k,motionMs:mo,sweepEndMs:se,settleFromMs:se+1000,settleByMs:se+4000,holdEndMs:se+60000,selfMoveMs:se+3500};}
   function Runner(h){this.h=h;this.active=false;this.phase='idle';this.timer=null;this.serial=0;this.spent=-1;this.lastResult='not_run';}
+  // Only the explicit host bench opts in. Missing mixed-cache metadata keeps the strict rule.
+  Runner.prototype.holdingOkay=function(p){return p.kind==='up'||this.bench===true&&p.soft===true&&finite(p.bad)&&p.bad>=0&&p.bad<4;};
   Runner.prototype.inspect=function(){var h=this.h,G=root.GBGetupWire,t=h.now(),c=h.context(),s=fresh(h.sample(),t);
     if(!G)throw Error('adapter_not_loaded');
     if(!c.enabled||c.paused||c.hidden||c.dreaming||c.asleep)throw Error('not_available');
     if(c.busy)throw Error('body_busy');
     if(!c.transport||!c.ready||c.awake!==1||!c.ws||c.buffer!==0||!finite(c.generation))throw Error('body_unavailable');
-    return {selection:G.select(h.body(),h.source(),h.mode()),raw:rawSafe(h.raw()),sample:s,context:c,posture:G.posture(h.samples(),t)};};
+    var bench=!!(h.bench&&h.bench()===true);if(bench&&typeof G.TallEngine!=='function')throw Error('adapter_not_loaded');
+    return {selection:G.select(h.body(),h.source(),h.mode(),bench),raw:rawSafe(h.raw()),sample:s,context:c,posture:G.posture(h.samples(),t),bench:bench};};
   Runner.prototype.cancel=function(why){if(!this.active)return;this.active=false;this.serial++;if(this.timer!==null)this.h.clear(this.timer);this.timer=null;
     this.phase='idle';this.lastResult=why||'stopped';this.h.ended(this.lastResult,{everUpright:!!this.confirmed,posture:root.GBGetupWire.posture(this.h.samples(),this.h.now()).kind});};
   Runner.prototype.start=function(request){
     if(this.active)throw Error('already_running');
     var h=this.h,G=root.GBGetupWire,t=h.now(),check=this.inspect(),c=check.context,p=check.posture,self=this;
-    var automatic=!!(request&&request.trigger==='automatic');
+    var automatic=!!(request&&request.trigger==='automatic'),model=!!(request&&request.trigger==='model');
     if(automatic){if(!finite(request.id)||request.id<=0||!h.automatic||h.automatic(request)!==true)throw Error('automatic_recovery_not_admitted');
       if(this.autoSpent===request.id)throw Error('one_try_per_episode');}
+    else if(model){if(!finite(request.id)||request.id<=0||!h.model||h.model(request)!==true)throw Error('model_recovery_not_admitted');if(this.modelSpent===request.id)throw Error('one_try_per_turn');}
     else {if(!request||!request.explicit||!finite(request.id)||!finite(request.age)||request.age<0||request.age>60000)throw Error('current_get_up_request_required');
       if(this.spent===request.id)throw Error('one_try_per_ask');}
     var k=request.speed===undefined?1:request.speed,P;if(SPEEDS.indexOf(k)<0)throw Error('speed_not_offered');P=profile(k);
@@ -38,8 +42,9 @@
     // Acquisition cancels prior holds and advances the shared motion generation.
     c=h.context();if(c.busy)throw Error('body_busy');
     this.selection=check.selection;this.raw=check.raw;this.context=c;this.sign=check.sample.sign;
-    this.engine=new G.Engine(this.selection,t,this.selection.neutral);this.started=t;this.last=t;this.profile=P;
-    if(automatic)this.autoSpent=request.id;else this.spent=request.id;this.trigger=automatic?'automatic':'named';this.requestId=request.id;this.active=true;this.phase='sweep';this.lastResult='running';this.confirmed=false;
+    this.bench=check.bench;this.holdLogAt=-Infinity;
+    this.engine=new (this.bench?G.TallEngine:G.Engine)(this.selection,t,this.selection.neutral);this.started=t;this.last=t;this.profile=P;
+    if(automatic)this.autoSpent=request.id;else if(model)this.modelSpent=request.id;else this.spent=request.id;this.trigger=automatic?'automatic':model?'model':'named';this.requestId=request.id;this.active=true;this.phase='sweep';this.lastResult='running';this.confirmed=false;
     var serial=++this.serial;
     h.owned(this);
     function tick(){if(!self.active||serial!==self.serial)return;
@@ -48,6 +53,7 @@
         if(!n.enabled||n.paused||n.hidden||n.dreaming||n.asleep||!n.ready||n.awake!==1||n.buffer!==0)throw Error('body_or_page_unavailable');
         if(n.transport!==c.transport||n.ws!==c.ws||n.generation!==c.generation||n.robotId!==c.robotId||n.epoch!==c.epoch||n.owner!==c.owner)throw Error('owner_or_connection_changed');
         if(rawSafe(h.raw())!==self.raw||!G.unchanged(self.selection,h.body(),h.source(),h.mode()))throw Error('calibration_or_body_changed');
+        if(self.bench&&!(h.bench&&h.bench()===true))throw Error('not_available');
         self.last=now;
         if(hold&&self.phase==='sweep'){self.phase='settling';h.event('recover_sweep_finished',{elapsedMs:now-t});}
         if(hold&&now-t>=P.settleFromMs){
@@ -55,7 +61,8 @@
           if(self.phase==='settling'){
             if(post.kind==='up'){self.phase='holding';self.confirmed=true;self.lastResult='upright_observed';h.event('recover_upright_observed',{post:post.kind,n:post.n});}
             else if(now-t>=P.settleByMs)throw Error('upright_not_confirmed_'+post.kind);
-          }else if(post.kind!=='up')throw Error('hold_posture_'+post.kind);
+          }else if(!self.holdingOkay(post))throw Error('hold_posture_'+post.kind);
+          else if(post.kind!=='up'&&now-self.holdLogAt>=1000){self.holdLogAt=now;h.event('recover_hold_tolerated',{bad:post.bad,kind:post.kind});}
         }
         if(now-t>=P.holdEndMs){h.stop('hold_finished');return;}
         out=self.engine.tick(k===1?now:t+k*(now-t),hold);h.pose(out.sent[0],out.sent[1],c);

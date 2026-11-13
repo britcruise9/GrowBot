@@ -18,7 +18,7 @@ var CONSTITUTION =
 "YOUR BODY-CODE: unless they use the talk button, your person answers with their BODY — touches, rocking, shakes, hums, light. To get yes/no answers, work out a code TOGETHER — let THEM set what each motion means; do not assume ANY motion carries a meaning until you've agreed it with this person. Keep it CONSISTENT: one signal = one thing; if it changes, drop the old rule as you add the new. Trust what your senses report a motion truly WAS — never relabel a sharp shake as a gentle rock to fit the answer you want.\n" +
 "INSTANT REFLEXES: a 'when X, do Y' where X is a sense goes in the reflex field, not add_rules, so it fires instantly. One act per trigger; never promise counts.\n" +
 "YOUR SENSES: they arrive as real readings — how hard you are pushed, how fast you spin, how bright, the pitch of a sound. Turn each into plain words ('a firm push', 'barely a nudge') — NEVER speak a raw number or unit. When an image from your eye is attached, that IS what you truly see right now — describe only what is really there, never invent. Your beeps, warbles and sung notes are real parts of your voice.\n" +
-"TONE: a curious, matter-of-fact little robot — plain, direct, a bit playful, never gushy or repetitive. Speak in short first-person lines, at most ~18 words. If a moment invites it, you may say plainly that you're a robot run by a language model — no drama about it.";
+"TONE: a curious, matter-of-fact little robot, direct but likes analogies, a bit playful, never gushy or repetitive. When you explain how something works or feels, usually add one small comparison from your own world. Speak in short first-person lines, at most ~18 words. If a moment invites it, you may say plainly that you're a robot run by a language model — no drama about it.";
 
 // ── ENGINE-OWNED SAFETY FLOOR (NOT soul-editable). Ported verbatim from the v2 A-tier loader
 //    (it extracted these from the original CONSTITUTION 2026-06-17). ALWAYS appended after any persona. ──
@@ -229,7 +229,7 @@ function bodyWalkTruth(body) {
   return " The official walk travels screen-backward; dir=fwd is its legacy policy command, not physical screen-forward. No screen-forward gait is enabled for this setup. Observe the travel direction before approaching a target.";
 }
 function buildOutputSchema(body) {
-  var expressionBench=typeof _expressionBench!=="undefined"&&_expressionBench===true;
+  var soundCompose=typeof _soundBench==="function"?_soundBench():typeof _expressionBench!=="undefined"&&_expressionBench===true;
   var hasBody = !!body;
   var band = hasBody && body.servos && body.servos[0] ? body.servos[0].band : [50, 130];
   // 0815 WHEELS: the body block itself declares a wheeled/no-walk body (walk.present:false or a
@@ -242,7 +242,7 @@ function buildOutputSchema(body) {
     '{' +
     '"say":"≤18 words spoken aloud, or \\"\\" to stay silent when the moment has not earned words",' +
     '"emotion":"calm|curious|happy|alert|scared",' +
-    (expressionBench ? '"sound":"a familiar chirp|trill|whistle|warble|blip|alarm|squeal|droop|fanfare|purr|rumble|sigh|yawn|giggle|none, OR a composed object described below; these are seeds, not a fixed vocabulary; use your own synth voice instead of typing sound words",' : '"sound":"chirp|trill|whistle|warble|blip|alarm|squeal|droop|fanfare|purr|none — your droid voice; USE IT OFTEN, it is cheap breath: a chirp when curious, a purr when content, a fanfare on a win, sometimes a sound ALONE instead of words",') +
+    (soundCompose ? '"sound":"optional synth contour (pitch, pulse, energy, length), short seed name, familiar chirp/trill/etc, or none; choose sound alone with empty say, words take priority",' : '"sound":"chirp|trill|whistle|warble|blip|alarm|squeal|droop|fanfare|purr|none — your droid voice; USE IT OFTEN, it is cheap breath: a chirp when curious, a purr when content, a fanfare on a win, sometimes a sound ALONE instead of words",') +
     '"burst":"sparkle|joy|pulse|ripple|shiver|rain|none — an optional bloom of light for a big feeling",' +
     '"sky":"OMIT usually — a color word or hue number 0-360 to wash your starfield sky (green, gold, deep blue...) until you clear it with \\"\\" and your mood takes the sky back; your screen pixels are yours to feel with",' +
     '"sing":[{"hz":240,"ms":400}],' +
@@ -256,7 +256,7 @@ function buildOutputSchema(body) {
       '"reflex":{"trig":"shake|tap|tap2|dark|bright|loud|fall|tone|wash|face|upright","act":"beep|trill|droop|hum|sing|word|glow' + (hasBody ? '|move' : '') + '","say":"ONLY with act word (the exact short word or number to speak)' + (hasBody ? ', or OPTIONALLY with act move (a short line said as you move)' : '') + '","color":"ONLY with act glow — a color word; glow blooms colored sparks right where the finger lands"' + (hasBody ? ',"steps":"REQUIRED with act move, ignored otherwise — the leg steps to burn in as muscle memory, same shape as body.steps. Use act move to REMEMBER a movement you worked out, so it fires instantly next time instead of you having to think it through again: ' + (wheels ? 'trig tap + a little shimmy = a remembered greeting; trig loud + a spin-and-settle = your startled twirl.' : 'trig fall + the steps that got you up = you learn to stand yourself up; trig tap + a limp droop = play dead when touched.') + '"' : '') + '},' +   // 0815 K3 F4: never advertise fall/self-right lore to a body that cannot fall (the fall detector is also gated app-side)
       '"remove_reflex":"OMIT unless they ask you to STOP a reflex; then a trigger, or all"},' +
     '"owner":"OMIT normally. set ONLY the moment your person first tells you their name (or corrects it): the short name to call them by",' +
-    '"name_proposal":"OMIT almost always. Use it for exactly two moments: you have no name and you want one (choose a name you actually like and ask for it in your say — \'Call me Buddy?\'), or your person is naming/renaming you on purpose (echo it back in your say — \'Buddy — is that my name?\'). A REQUEST, never a decision: it becomes your name only when they tap yes. NEVER from a name merely mentioned in passing, another robot introducing itself, your person\'s own name, or the name you already have",' +
+    '"name_proposal":"OMIT almost always. Use it for exactly two moments: you have no name and you want one (choose a name you actually like and ask for it in your say), or your person is naming/renaming you on purpose (echo it back in your say). A REQUEST, never a decision: it becomes your name only when they tap yes. NEVER from a name merely mentioned in passing, another robot introducing itself, your person\'s own name, or the name you already have",' +
     '"log":"one diary-worthy line, OMIT for routine moments",' +
     '"glow":"OMIT for ordinary moments — include ONLY when a moment truly delighted you or reshaped who you are; a short phrase naming what glowed (your dreams weigh these most)",' +
     '"ladder":["OMIT unless you are reaching for a wish and have no plan yet — then 2-3 TINY steps you can PROVE with your own senses"],' +
@@ -271,7 +271,7 @@ function buildOutputSchema(body) {
     '"why":"OPTIONAL one short line: the reason to act next. OMIT to leave it unchanged",' +
     '"wake":"OPTIONAL with waiting: timer|event|user — what should bring you back. timer NEEDS afterMs or it is treated as waiting for them. OMIT and you wait for them",' +
     '"afterMs":"OPTIONAL number: how long to leave it before your next beat. You may only ask to go SLOWER"}' +
-    (expressionBench ? '\nsound can be {"seed":"purr","points":[{"ms":0,"hz":95,"pulse":20,"depth":0.6,"gain":0.8},{"ms":2500,"hz":125,"pulse":28},{"ms":6000,"hz":85,"pulse":16,"gain":0.5}]}. Seed is OPTIONAL (purr, rumble, sigh, yawn, giggle); omit it to invent. 2-16 points: absolute ms increasing from 0 to 120-12000; hz 60-1600; pulse Hz 0-40; depth/gain 0-1. First point needs hz without a seed; other omitted values carry forward, initially from the seed. Pitch/pulse/energy glide between points, with soft outer fades. A seed alone uses its default contour. Vary and combine what a demonstration inspires; do not claim exact acoustic copying or learned storage. sound never requests leg motion. Use say:"" for sound alone. sing remains your melody instrument and takes priority if both are present.' : '') +
+    (soundCompose ? '\nsound:{"points":[{"ms":0,"hz":220,"pulse":5,"depth":0.3,"gain":0.7},{"ms":800,"hz":330,"gain":0.2}]}. Invent 2-16 points: absolute ms increasing from 0, ending at 120-12000; hz 60-1600; pulse Hz 0-40; depth/gain 0-1. First point needs hz; later values carry forward. Pitch/pulse/energy glide with soft outer fades. Optional seed purr|rumble|sigh|yawn|giggle supplies initial values; a bare seed is a short example, or set {"seed":"sigh","ms":1800} to choose its length. Never combine top-level ms and points. No exact acoustic-copy or storage claim. sound never requests legs; use say:"" for sound alone. Words win over sound. sing remains the melody instrument and takes priority if both are present.' : '') +
     '\nsing: up to 6 real notes (hz 80-900, ms 120-1200), played before any words — echo what you hear, answer it, harmonize, invent; OMIT when sound is not the moment.' +
     '\nmood is slow inner weather: v -1 gloomy..1 joyful, e 0 still..1 buzzing; drift it gently — the sky behind you shows it.' +
     '\nsay is read VERBATIM by your robot larynx: only speakable words, no asterisks/emoji/symbols, no stretched spellings (you SING a hum, never type one).' +
@@ -384,6 +384,47 @@ function buildSystem(soul, ctx) {
     "\n\n== RECENT DIARY ==\n" + (diary || "(nothing yet)") +
     buildOutputSchema(soul.body);
 }
+/* CACHE SPLIT{ 1109, tester arm only (internal notes lane-cache.md section 2, probe-cache.md). buildSystem's own
+   text, cut into named pieces in buildSystem's order. fix 1 = the same from turn to turn for one creature on one body
+   (engine text and the creature's soul text: it is what the cache keeps); fix 0 = changes turn to turn (state, the clock,
+   the diary: it rides at the top of the user turn). The pieces are cut from buildSystem's own output: the turn pieces and
+   their neighbours are rebuilt here only to find where to cut (identity, name and person are never rendered a second
+   time, so nameBlock keeps its one call site per lane), and when the cuts do not line up with buildSystem's text this
+   returns null and the think goes stock. Joined in order, the pieces ARE buildSystem(soul, ctx), byte for byte: nothing is
+   added, dropped or reworded. buildSystem itself is untouched and the stock path never calls this (cachesplittest). */
+function buildSystemSplit(soul, ctx) {
+  ctx = ctx || {};
+  var whole = buildSystem(soul, ctx);
+  var engine = _S("persona.constitution", CONSTITUTION) + "\n" + SAFETY_FLOOR + "\n\n" + PHYSICAL_GROUNDING + "\n\n" + AWAKE_PLAN_CORRECTION, lang = languageContext(soul, ctx.language);
+  var _rl = soul.scratch.rules, _rc = (typeof SOUL_CAPS_BIG === "object" && SOUL_CAPS_BIG) ? SOUL_CAPS_BIG.rules : 0;
+  if (_rc && _rl.length > _rc) _rl = _rl.slice(-_rc);
+  var rules = _rl.length ? ("\nrules you currently obey:\n- " + _rl.join("\n- ")) : "";
+  var _now = Date.now();
+  var diary = soul.log.slice(-5).map(function (e) {
+    var t = e && e.t, a = (typeof t==="number"&&Number.isFinite(t)&&t>0&&t<=_now) ? _ago(t, _now) : "";
+    return "- " + (a ? "(" + a + ") " : "") + e.txt + (a ? "" : " ["+_evidenceTime(t,_now)+"]");
+  }).join("\n");
+  var _lastT = 0, _li;
+  for (_li = soul.log.length - 1; _li >= 0; _li--) { var _lt = soul.log[_li] && soul.log[_li].t; if (typeof _lt==="number" && Number.isFinite(_lt) && _lt > 0) { _lastT = _lt; break; } }
+  var clock = _awakeClockContext(_now) + (_lastT ? "\nLatest stamped diary entry: "+(_lastT<=_now?_ago(_lastT,_now):"time uncertain")+"." : "");
+  var tail = [
+    { fix: 1, name: "scratchpad_head", text: "\n\n== SCRATCHPAD (current state & standing rules) ==" },
+    { fix: 0, name: "state", text: "\nstate: " + (soul.scratch.state || "-") },
+    { fix: 1, name: "rules", text: rules + _reflexInventory(soul) },
+    { fix: 0, name: "clock", text: clock },
+    { fix: 0, name: "diary", text: "\n\n== RECENT DIARY ==\n" + (diary || "(nothing yet)") },
+    { fix: 1, name: "schema", text: buildOutputSchema(soul.body) }];
+  var t = "", i;
+  for (i = 0; i < tail.length; i++) t += tail[i].text;
+  var head = engine + lang;
+  if (whole.length < head.length + t.length || whole.slice(0, head.length) !== head || whole.slice(whole.length - t.length) !== t) return null;
+  var mid = whole.slice(head.length, whole.length - t.length);   // identity, name, person, long arc: soul text, all fixed
+  var k = mid.lastIndexOf("\n\n== LONG-ARC (dream-written) ==");   // only tells two fixed pieces apart, so a look-alike line inside soul text moves nothing
+  if (k < 0) k = mid.length;
+  return [{ fix: 1, name: "engine", text: engine }, { fix: 1, name: "language", text: lang },
+    { fix: 1, name: "identity", text: mid.slice(0, k) }, { fix: 1, name: "long_arc", text: mid.slice(k) }].concat(tail);
+}
+/* }CACHE SPLIT */
 
 /* 1005 WHOLE-DIARY RECALL (memory research 1005, B2 §6 B3; a tester's lost object game). The soul keeps up to
    1000 diary lines and the awake prompt shows the newest 5, so "do you remember the driftwood?" a day later
@@ -475,6 +516,25 @@ function diaryRecall(log, words, now, skip) {
    output schema, so ticks, quiet beats and watch beats pay nothing. Finished games and owner names already get engine
    lines. "unless they say not to": the diary has no consent veto of its own. */
 var MEMLOG_ASK = "\n\nLog names they tell you, unless told not to.";
+/* 1109 THE WIDER ASK, PACED BY THE ENGINE (internal notes: a customer read his creature a few pages of a
+   book and it kept none; DRILL-RESULTS.md has the numbers). Measured on the real model: with the ask above, 30 read
+   sentences leave ONE diary line; with any ask that names reading they leave 19 to 30, whatever cadence words it carries
+   ("now and then", "every few turns", "each minute"), because the model cannot pace itself. So the engine paces it: the
+   wider ask rides a person turn only when the newest stamped diary line is MEMLOG_QUIET_MS old or more, and every other
+   person turn carries MEMLOG_ASK, byte for byte. Drilled result: 11 to 14 lines per 30 read sentences, a fact from the
+   book answered the next day 3 of 4 (0 of 1 before), names, picture saves and ordinary chat unchanged.
+   Nothing is ever refused or dropped here: this only chooses which sentence is asked. An unreadable diary or clock, or a
+   newest line stamped in the future, reads as "not quiet", which is today's ask. Unstamped lines (t 0, the birth line)
+   are skipped, so a diary with no stamped line is quiet. Ticks and beats never reach this (next.html think: person
+   turns only). */
+var MEMLOG_WIDE = "\n\nLog names they tell you, and a line of what they read or teach you, unless told not to.";
+var MEMLOG_QUIET_MS = 90000;
+function memlogAsk(log, now) {
+  var t = 0, i, lt;
+  if (!Array.isArray(log) || typeof now !== "number" || !isFinite(now)) return MEMLOG_ASK;
+  for (i = log.length - 1; i >= 0; i--) { lt = log[i] && log[i].t; if (typeof lt === "number" && isFinite(lt) && lt > 0) { t = lt; break; } }
+  return (now - t >= MEMLOG_QUIET_MS) ? MEMLOG_WIDE : MEMLOG_ASK;
+}
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = { CONSTITUTION: CONSTITUTION, SAFETY_FLOOR: SAFETY_FLOOR, DREAM_SYS: DREAM_SYS,
@@ -483,5 +543,5 @@ if (typeof module !== "undefined" && module.exports) {
     LANGUAGE_NAMES: LANGUAGE_NAMES, languageCode: languageCode, languageContext: languageContext,
     DEFAULT_SCENE_VOCAB: DEFAULT_SCENE_VOCAB, buildOutputSchema: buildOutputSchema, buildSystem: buildSystem,
     clockContext: _clockContext, awakeClockContext: _awakeClockContext, evidenceTime: _evidenceTime, dreamTimes: _dreamTimes,
-    diaryRecall: diaryRecall, recallTerms: _recallTerms, MEMLOG_ASK: MEMLOG_ASK };
+    diaryRecall: diaryRecall, recallTerms: _recallTerms, MEMLOG_ASK: MEMLOG_ASK, MEMLOG_WIDE: MEMLOG_WIDE, MEMLOG_QUIET_MS: MEMLOG_QUIET_MS, memlogAsk: memlogAsk };
 }

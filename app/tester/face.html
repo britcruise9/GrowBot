@@ -62,7 +62,12 @@ import {readProfile,profileMatches as savedProfileMatches,readFaceWiring,readFac
 import {StanceGuard,BENCH_GAZE} from './face-evidence/stance-guard.mjs';
 const $=id=>document.getElementById(id);
 const qp=new URLSearchParams(location.search);
+// 10-14 skip (no robot): the /tester shell's look mounts this tab with ?id=&look=1. An empty ?id= alone is this page's
+// own "type a code" state (its setup flow lands there after a cleared field), so only look=1 means no robot at all:
+// no code from anywhere, a locked field, no relay. It survives this page's own setup hops (faceURL keeps the query).
+const LOOK=qp.get('look')==='1', LOOK_SAY='No robot connected. Connect a robot to use this.';
 function entryRobot(){
+  if(LOOK)return '';
   // An explicit empty id means no robot. A saved Face choice is a fallback
   // only when neither the URL nor the normal pairing names a robot.
   if(qp.has('id'))return(qp.get('id')||'').trim();
@@ -99,7 +104,7 @@ function profileMatches(){
   return initialProfile.supported&&savedProfileMatches(localStorage,initialProfile.signature);
 }
 const tEl=$('trace'); function trace(s){ const d=document.createElement('div'); d.textContent='> '+s; tEl.appendChild(d); while(tEl.childElementCount>60)tEl.removeChild(tEl.firstChild); tEl.scrollTop=tEl.scrollHeight; }
-try{ if((localStorage.gb_ui_mode||'simple')!=='expert') $('ladface').style.display='block'; }catch(e){}   // SIMPLE-mode banner (0715): this tab is an optional stop on the numbered path
+try{ if(qp.get('ui')!=='expert') $('ladface').style.display='block'; }catch(e){}   // 10-14: the mode is the shell's &ui=expert for this visit only (Brit: "always default to simple mode for all tabs"). SIMPLE-mode banner (0715): this tab is an optional stop on the numbered path
 
 // ── relay (shared transport) — face demo drives the WALK lane just like the other remotes ──
 let body=null,armed=false,wantFollow=false,armEpoch=0,lastFrame=-Infinity,seenSince=null,centerSince=null;
@@ -170,8 +175,9 @@ function sendPose(goal,now,hold=false,settling=false){
 }
 $('follow').onchange=()=>{if(!$('follow').checked)disarm('Follow off — legs released');else requestFollow();};
 addEventListener('pagehide',()=>{disarm('Page closed — follow stopped');});document.addEventListener('visibilitychange',()=>{if(document.hidden){disarm('Page hidden — follow stopped');}});
-function makeBody(id){disarm('Body connection changed — enable follow when ready');if(body)body.close();body=null;if(!id){$('st').textContent='Enter your robot’s pairing code';return;}let wasOnline=false;const next=new RelayBody(id,{onStatus:a=>{if(body!==next)return;if(!a&&wasOnline)disarm('Body offline — enable follow after reconnecting');if(a)wasOnline=true;$('dot').className='dot'+(a?' on':'');trace(a?'body online':'body offline');}});body=next;body.connect();}
+function makeBody(id){disarm('Body connection changed — enable follow when ready');if(body)body.close();body=null;if(!id||LOOK){$('st').textContent=LOOK?LOOK_SAY:'Enter your robot’s pairing code';return;}let wasOnline=false;const next=new RelayBody(id,{onStatus:a=>{if(body!==next)return;if(!a&&wasOnline)disarm('Body offline — enable follow after reconnecting');if(a)wasOnline=true;$('dot').className='dot'+(a?' on':'');trace(a?'body online':'body offline');}});body=next;body.connect();}
 $('id').value=entryId;
+if(LOOK){$('id').disabled=true;$('id').placeholder='no robot connected';}   // 10-14 skip (no robot), see LOOK above
 $('id').addEventListener('input',()=>{if(initialProfile.source==='face'&&$('id').value.trim()!==initialProfile.bodyId)disarm('Robot changed — choose its Face setup first');});
 $('id').addEventListener('change',()=>{const firstPair=!body&&wantFollow;const id=$('id').value.trim();if(initialProfile.source==='face'&&!faceSelectionMatches(localStorage,initialProfile,id)){disarm('Robot changed — choose its Face setup first');if(body)body.close();body=null;showSetup(id);return;}if(id)localStorage.gb_walk_id=id;makeBody(id);if(firstPair&&body)requestFollow();});
 if(initialProfile.source==='face')$('verticalNote').firstChild.textContent='Combined · your confirmed setup. ';

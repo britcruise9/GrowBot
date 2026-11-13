@@ -40,7 +40,7 @@ export class RelayBody {
   constructor(deviceId, opts = {}) {
     this.id = String(deviceId || 'bench');
     this.relay = opts.relay || RELAY_DEFAULT;
-    this.onStatus = opts.onStatus || (() => {});   // (awake:0|1)
+    this.onStatus = opts.onStatus || (() => {});   // (awake:0|1, boot?:{reset,up_ms,fw}); old one-argument listeners still work
     this.onAck = opts.onAck || (() => {});          // ({rid, ok, queued_ms})
     this.onAlive = opts.onAlive || (() => {});      // ({quiet_ms}): still there, even while holding still
     this.onOpen = opts.onOpen || (() => {});
@@ -80,7 +80,7 @@ export class RelayBody {
       if (!current()) return;
       let m; try { m = JSON.parse(e.data); } catch (_) { return; }
       if (!m || typeof m !== 'object') return;
-      if (m.t === 'status' && (m.awake === 0 || m.awake === 1)) { this.awake = m.awake; this.onStatus(m.awake); }   // only a real 0/1 is presence
+      if (m.t === 'status' && (m.awake === 0 || m.awake === 1)) { this.awake = m.awake; this.onStatus(m.awake, m.boot); }   // only a real 0/1 is presence
       else if (m.t === 'ack') { this.onAck(m); }
       else if (m.t === 'alive' && Number.isFinite(m.quiet_ms)) { this.onAlive(m); }
     };

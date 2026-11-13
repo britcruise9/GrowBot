@@ -9,7 +9,9 @@
 #     {"t":"pose","lr":"L,R"}                          WALK lane: latest-wins ~30Hz, L,R int deg 0..180
 #     {"t":"act","rid","steps":[{l,r,ms}],"mode"}      GESTURE lane: keyframes; mode "replace"|"append"
 #     {"t":"routine","rid","name"}                     canned gesture (e.g. "wiggle")
-#     {"t":"stop","rid"}                               halt gesture + limp
+#     {"t":"stop","rid"}                               halt gesture + limp (the arm too, when there is one)
+#     {"t":"arm",...}                                  ARM lane (1026): only on a robot carrying arm_body.py,
+#                                                      which documents it; every other robot ignores it
 #   chip -> phone:
 #     {"t":"hello","id","boot","caps"}                 chip handshake to the relay (boot = reset cause,
 #                                                      uptime, build; caps ["hb"] = I send heartbeats)
@@ -64,7 +66,7 @@ PING_MS = 10000           # heartbeat cadence once the link has been quiet this 
 # says why this boot happened; the relay drops a chip that goes 45 s without one (relay/worker.js).
 HB_MS = 15000
 HB = '{"t":"hb"}'         # byte-exact: the relay's edge auto-answers only this exact text
-FW_TAG = "travel-0929"
+FW_TAG = "travel-1026"
 LINK_DEAD_MS = 25000      # quiet this long (= 2 unanswered pings) -> wedged, re-dial
 WIFI_RESET_EVERY = 3      # straight failures between radio power-cycles
 HARD_RESET_AFTER = 10     # straight failures before machine.reset() (~3-5 min of trying)
@@ -72,9 +74,9 @@ WDT_MS = 8000             # hardware watchdog period (rp2 hardware caps near 8.3
 # 0923 HANG A/B. The radio's default power-saving can let an idle link miss frames while it still
 # reports itself associated. Build A leaves the radio at its DEFAULT (what shipped before this);
 # build B sets this False and turns power-saving off. It is the only line the two builds differ
-# by, so a change in hangs between them can be put on this and nothing else. Not a fix until the
-# two builds have been compared on the same robot, network and spot.
-WIFI_POWERSAVE = True
+# by, so a change in hangs between them can be put on this and nothing else. 1021: ships False
+# (Brit's robot over USB: power save stalled 2 of 4 connects ~3 s on a lost SYN; off, 22-81 ms).
+WIFI_POWERSAVE = False
 
 wlan = network.WLAN(network.STA_IF)
 
@@ -131,8 +133,9 @@ def _wifi_list():
     return nets
 
 def _visible_ssids():
-    # one scan, watchdog-fed; returns {ssid: rssi}. A failed scan returns {} and the
-    # caller just tries the list in order — scan is an optimization, never a gate.
+    # one scan, watchdog-fed; returns {ssid: rssi}. A failed scan returns None (1022: so "could
+    # not look" never reads as "nothing saved in sight") and ensure_wifi just tries the list in
+    # order — scan is an optimization, never a gate.
     seen = {}
     try:
         feed()
@@ -146,9 +149,10 @@ def _visible_ssids():
         feed()
     except Exception as e:
         print("scan err", e)
+        return None
     return seen
 
-def ensure_wifi(timeout_ms=None, scan_allowed=True, preferred=None):
+def ensure_wifi(timeout_ms=None, scan_allowed=True, preferred=None, only=None):
     started = time.ticks_ms()
     wlan.active(True)
     radio_pm()
@@ -157,11 +161,13 @@ def ensure_wifi(timeout_ms=None, scan_allowed=True, preferred=None):
         if nets:
             # CYW43 scan can block 10s, exceeding the armed 8s watchdog. Optional
             # scan only before arming; setup always permits exact manual SSIDs.
-            vis = _visible_ssids() if scan_allowed and _wdt is None else {}
+            vis = (_visible_ssids() if scan_allowed and _wdt is None else None) or {}
             # visible networks first (strongest first), invisible ones after (hidden SSIDs still get a shot)
             order = sorted([n for n in nets if n[0] in vis], key=lambda n: -vis[n[0]])                   + [n for n in nets if n[0] not in vis]
             if preferred is not None:
                 order = [n for n in order if n[0] == preferred] + [n for n in order if n[0] != preferred]
+            if only:                                    # 1022 home grace: knock only on saved names in sight
+                order = [n for n in order if n[0] in only] or order
             for index, (ssid, pw) in enumerate(order):
                 if timeout_ms is not None and time.ticks_diff(time.ticks_ms(), started) >= timeout_ms:
                     break
@@ -312,6 +318,18 @@ ROUTINES = {"wiggle": [{"l": 60, "r": 120, "ms": 400}, {"l": 120, "r": 60, "ms":
                        {"l": 60, "r": 120, "ms": 400}, {"l": 120, "r": 60, "ms": 400},
                        {"l": 90, "r": 90, "ms": 300}]}
 
+# 1026 ARM (optional). A robot carrying arm_body.py + arm_config.py (copied by hand; the USB installer never
+# writes them) drives a servo arm on its own sockets, default 2-5. Every other robot gets ImportError here, arm
+# stays None, and nothing below touches a socket past the legs: every use of it is under `if arm is not None`.
+arm = None
+try:
+    import arm_body
+    arm = arm_body.for_firmware(board, time.ticks_ms, time.ticks_diff)
+except ImportError:
+    pass
+except Exception as e:
+    print("arm off:", e)                                # a broken arm file never takes the legs or Wi-Fi down
+
 def _handle(s, pl):
     """Dispatch one text frame. Returns the lane kind so serve() can manage the dead-man."""
     try:
@@ -337,6 +355,11 @@ def _handle(s, pl):
         link.update(_link)
         send_text(s, json.dumps({"t": "wifi_status", "rid": rid, "result": result, "link": link}))
         return None
+    if t == "arm" and arm is not None:                  # 1026: the arm lane (no arm = ignored, as before)
+        reply = arm.handle(m)                           # never raises; None = a stream frame with no rid
+        if reply is not None:
+            send_text(s, json.dumps(reply))
+        return "arm"
     if board is None and t in ("pose", "act", "routine"):
         send_text(s, json.dumps({"t": "ack", "rid": m.get("rid"), "ok": 0, "error": "motor_unavailable"}))
         return None
@@ -362,6 +385,8 @@ def _handle(s, pl):
         return "act"
     if t == "stop":
         eng.clear(); _act_release()
+        if arm is not None:
+            arm.limp()                                  # 1026: STOP limps the arm too
         send_text(s, json.dumps({"t": "ack", "rid": m.get("rid"), "ok": 1, "queued_ms": 0}))
         return "stop"
     return None
@@ -439,6 +464,8 @@ def serve(s, raw):
                 s.write(bytes([0x89, 0x80]) + os.urandom(4))    # ping; the pong refreshes last_rx
                 last_ping = now
         eng.tick()                                      # glide any queued gesture (~50Hz)
+        if arm is not None:
+            arm.tick()                                  # 1026: the arm's slew + idle limp (never blocks or raises)
         if walk_on and not eng.active and time.ticks_diff(time.ticks_ms(), last_pose) > DEADMAN_MS:
             _act_release(); walk_on = False             # WALK dead-man: relax on silence
             print("dead-man: walk limp (silence)")
@@ -446,11 +473,57 @@ def serve(s, raw):
 _recovery = None
 _recovery_initialized = False
 WIFI_RECOVERY_AFTER_MS = 75000
+# 1021 (Brit's robot, a whole day at home): when the 75 s run out and a SAVED network is in sight,
+# the router is there but saying no (or still waking up), so keep knocking on it until this long
+# after power-on before opening setup. One extension per boot; the travel case (nothing saved in
+# sight) opens setup at 75 s exactly as before.
+WIFI_RECOVERY_HOME_MS = 180000
+_home_grace = False       # this outage is in the home grace (1022: ends when it joins or setup opens)
+_home_grace_used = False  # ...one per boot
+_home_seen = None         # 1022: the saved names that scan saw when the grace started
+_scan_cache = None        # (ticks_ms, {ssid: rssi} or None) from the in-sight check, reused by _prepare_recovery
 
 def _recovery_after_ms():
     # 0923: a robot installed with NO Wi-Fi (set it up from the phone) has nothing to wait 75 s
     # for, so its setup network opens straight away.
-    return WIFI_RECOVERY_AFTER_MS if _wifi_list() else 0
+    if not _wifi_list():
+        return 0
+    return WIFI_RECOVERY_HOME_MS if _home_grace else WIFI_RECOVERY_AFTER_MS
+
+def _scan_now():
+    global _scan_cache
+    wlan.active(True)
+    radio_pm()
+    seen = _visible_ssids()
+    _scan_cache = (time.ticks_ms(), seen)
+    return seen
+
+def _saved_in_sight():
+    # True/False from a fresh scan; None when no scan is allowed (the watchdog is armed: a scan can
+    # block ~10 s) or the scan failed. Also the setup window's quick look before a retry (1021).
+    if _wdt is not None:
+        return None
+    try:
+        seen = _scan_now()
+        if seen is None:
+            return None
+        return any(n[0] in seen for n in _wifi_list())
+    except Exception as e:
+        print("scan err:", e)
+        return None
+
+def _in_sight():
+    # 1022: the saved names a scan saw in the last 10 s (None = no such scan, or it failed). The home grace
+    # and the setup retries knock only on these, so one in-sight home gets the whole join budget instead
+    # of a share split across every saved name (ensure_wifi falls back to all of them if none).
+    # 1022 review: an older scan (the power-on one; any scan once armed) narrows nothing. Otherwise a
+    # saved hotspot switched on later, or a hidden home, gets no knock for the whole setup window.
+    try:
+        if _wdt is None and time.ticks_diff(time.ticks_ms(), _scan_cache[0]) < 10000:
+            return [n[0] for n in _wifi_list() if n[0] in _scan_cache[1]]
+    except Exception:
+        pass
+    return None
 
 def _prepare_recovery():
     # The setup page lists the names the robot can see, so nobody has to type one. The scan can
@@ -459,18 +532,18 @@ def _prepare_recovery():
     _recovery.nearby = None
     if _wdt is None:
         try:
-            wlan.active(True)
-            radio_pm()
-            seen = _visible_ssids()
-            ranked = sorted(seen.items(), key=lambda kv: -kv[1])
+            fresh = _scan_cache is not None and time.ticks_diff(time.ticks_ms(), _scan_cache[0]) < 10000
+            seen = _scan_cache[1] if fresh else _scan_now()   # the in-sight check's scan, when it just ran
+            ranked = sorted((seen or {}).items(), key=lambda kv: -kv[1])
             _recovery.nearby = [n for n, _ in ranked if not n.startswith("GrowBot-Setup-")][:15]
         except Exception as e:
             print("nearby scan err:", e)
-    _recovery.retry = lambda ms: ensure_wifi(ms, scan_allowed=False)
+    _recovery.retry = lambda ms: ensure_wifi(ms, scan_allowed=False, only=_in_sight())
+    _recovery.look = _saved_in_sight if _wdt is None else None   # 1021: setup checks for home every minute
     print("setup network opening; nearby names:", -1 if _recovery.nearby is None else len(_recovery.nearby))
 
 def main():
-    global _recovery, _recovery_initialized
+    global _recovery, _recovery_initialized, _home_grace, _home_grace_used, _home_seen
     if not _recovery_initialized:
         _recovery_initialized = True
         try:
@@ -497,9 +570,14 @@ def main():
                 wifi_cycle = time.ticks_ms()
             after = _recovery_after_ms() if eligible else WIFI_RECOVERY_AFTER_MS
             remaining = None if not eligible else max(0, after - time.ticks_diff(time.ticks_ms(), wifi_cycle if wifi_cycle is not None else time.ticks_ms()))
-            if remaining != 0 and ensure_wifi(remaining, scan_allowed=not eligible, preferred=preferred):
+            if remaining != 0 and ensure_wifi(remaining, scan_allowed=not eligible, preferred=preferred,
+                                             only=_home_seen if _home_grace else None):
                 preferred = None
                 wifi_cycle = None
+                if _home_grace:
+                    fails = 0                           # 1022 review: the grace's knocks are not relay failures
+                _home_grace = False                     # 1022: the grace ends with the outage it extended
+                _home_seen = None
                 s, raw = ws_open()
                 if s:
                     serve(s, raw)                       # only returns when the link died
@@ -519,6 +597,8 @@ def main():
             _act_release()                              # offline = limp: no held torque on a stale pose
         except Exception:
             pass
+        if arm is not None:
+            arm.limp()                                  # 1026: link gone = the arm limps too (never raises)
         if _recovery is not None and wlan.isconnected():
             # Stage-2 firmware: three failed relay attempts, with ordinary
             # backoff, earn one alternate saved route first on the next dial.
@@ -542,13 +622,21 @@ def main():
                 and wifi_cycle is not None and time.ticks_diff(time.ticks_ms(), wifi_cycle) >= _recovery_after_ms()):
             # This owns the radio, WDT and motor-limp interval. Ordinary bounce /
             # hard-reset escalation is suspended until the absolute window ends.
-            _prepare_recovery()
-            _recovery.run()
-            fails = 0
-            wifi_cycle = None
-            continue
+            if not _home_grace_used and _saved_in_sight() is True:
+                _home_grace = _home_grace_used = True
+                _home_seen = _in_sight()
+                fails = 0                               # 1022: the grace never runs into the self-heal reset
+                print("home Wi-Fi in sight; trying it until %ds before opening setup" % (WIFI_RECOVERY_HOME_MS // 1000))
+            else:
+                _home_grace = False
+                _home_seen = None
+                _prepare_recovery()
+                _recovery.run()
+                fails = 0
+                wifi_cycle = None
+                continue
         fails += 1
-        if fails >= HARD_RESET_AFTER:
+        if fails >= HARD_RESET_AFTER and not _home_grace:   # 1022: a reset here is WDT-class: it would lose setup
             print("self-heal: machine.reset()")         # = the power cycle users did by hand
             sleep_fed(200)
             machine.reset()
@@ -558,6 +646,8 @@ def main():
             except Exception as e:
                 print("wifi reset err:", e)
         wait = min(30000, 1000 << min(fails, 5))        # backoff 2s,4s,8s,16s,30s cap
+        if _home_grace and not wlan.isconnected():
+            wait = 5000                                 # 1022: in the home grace, knock again soon (not 30 s)
         _link["redials"] += 1
         print("re-dial in %ds (fail %d)" % (wait // 1000, fails))
         sleep_fed(wait)
@@ -592,4 +682,6 @@ def _cold_boot():
 
 if _cold_boot():
     boot_calibration()
+    if arm is not None:
+        arm.park(sleep_fed)                             # 1026: the arm to rest, one joint at a time, then limp (real power-ups only: a self-heal reboot leaves it limp, so nobody near it is surprised)
 main()

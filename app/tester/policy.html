@@ -71,6 +71,11 @@ small{color:#566;font-size:10px}
 .rung .res{font-size:11.5px;color:var(--teal);min-height:1.1em;margin-top:8px;line-height:1.5}
 .launchbtn{padding:18px;border-radius:12px;border:1px solid var(--teal);background:rgba(55,224,200,.09);color:var(--teal);font-size:17px;font-weight:800;width:100%}
 .escx{background:none;border:0;color:#5a6b85;font-size:11px;text-decoration:underline;padding:10px;align-self:center;font-weight:400}
+/* gentle spin (10-14) */
+.gs{display:flex;flex-direction:column;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 11px}
+.gs .hint{text-align:left}
+.gs .res{font-size:11.5px;color:var(--teal);min-height:1.1em;line-height:1.5}
+#gsstop{color:var(--red);flex:0 0 auto;padding:11px 12px}
 </style></head><body>
 <button id=start>TAP TO WAKE<br><small>grants motion, connects relay, loads policy</small></button>
 
@@ -96,6 +101,12 @@ small{color:#566;font-size:10px}
   </div>
   <button class=escx id=lesc>I know what I am doing · expert mode</button>
  </div>
+ <!-- 10-14 (Brit: "missing our new gentle spin, let's add both"): the creature's own R3 normal spin, both ways. Shown in SIMPLE and EXPERT. -->
+ <div id=gentlespin class=gs>
+  <div class=hint><b>Gentle spin</b>: the spin GrowBot uses. Stock two-leg body, SWAP off. Hold still for the sensors, then pick a way. It runs five seconds.</div>
+  <div class=r><button id=gsright>↻ gentle spin right</button><button id=gsleft>↺ gentle spin left</button><button id=gsstop>STOP</button></div>
+  <div class=res id=gsres></div>
+ </div>
  <p id="spinhelp" class="hint" hidden><b>Spin v4</b><br>Place the robot flat, screen up. Pick a direction, press RE-ZERO while still, then RUN SPIN. It uses your trims and gain with the spin's own wiring, the same as the agent. Checked on one robot with SWAP off; results may vary.</p>
  <div id=spindir class=r style="display:none"><button class="dirb on" data-dir=right>↻ spin right (CW)</button><button class=dirb data-dir=left>↺ spin left (CCW)</button></div><div id=polbar><span>policy: <b id=polname>Screen-forward walk</b></span><button id=load>Load policy</button></div>
  <div class=imu>
@@ -103,7 +114,7 @@ small{color:#566;font-size:10px}
    <div><span>gravity</span><b id=igrav style="color:var(--teal)">-</b></div>
    <div>L<b id=il>90</b></div><div>R<b id=irr>90</b></div><div>Hz<b id=ihz>0</b></div>
  </div>
- <div class=hint><b>Legs look off? Fix them in the Calibrate tab first.</b> If the walk leans or splits, hit RESET there. · L/R = leg angle, Hz = motor commands per second</div>
+ <div class=hint><b>Legs look off? Fix them in the Calibrate tab first.</b> · L/R = leg angle, Hz = motor commands per second</div>
  <div id=calecho>cal: —</div>
  <div id=steer>
    <div class=hint>steerable — pick a direction, then tap RUN WALK</div>
@@ -148,6 +159,7 @@ small{color:#566;font-size:10px}
 <script src="/forward-basic.js?v=1001"></script>
 <script src="/tester/forward-test.js?v=1001c"></script>
 <script src="/spin-wire.js?v=0930"></script><!-- 0930: the spin v4 wiring (window.GBSpinWire), the SAME file the v3 agent's runSpinPolicy uses, so RUN SPIN and the agent cannot drift -->
+<script src="/normal-spin.js?v=1008-stall"></script><!-- 10-14: the creature's R3 normal spin (window.GBNormalSpin), the SAME file and address next.html loads, so the gentle spin buttons and the agent cannot drift -->
 <script>
 /* 0810 old-device black-box recorder (classic script ON PURPOSE: a module-graph parse failure —
    exactly what broke iPhone 6 here, ?? in growbot_runner.js — kills the module before any of its
@@ -162,6 +174,7 @@ window.addEventListener('error', function(ev){
 }, true);
 </script>
 <script type="module">
+import '/trim-store.js';
 import { GrowBotWalker } from '/growbot_policy.js';
 import { Walker } from '/growbot_runner.js';
 import { RelayBody } from '/relay-transport.js';
@@ -176,6 +189,11 @@ const API='/api/gallery', TYPE='policy';
 const SHOW_COMMUNITY=true;    // Brit 0728: back ON for calibration testing — he needs the recent walks
 const COMMUNITY_RECENT=5;     // ...but only the NEWEST few. 28 entries is a wall of near-identical names on a phone; 5 covers everything uploaded this month.
 const qp=new URLSearchParams(location.search);
+// 10-14 skip (no robot): an explicit EMPTY ?id= means no robot, face.html's rule. The /tester shell's skip mounts
+// this tab that way so it can be looked at on a desktop: no relay, no saved code, no 'bench', nothing sent.
+// Every button that would move a leg says so instead (noRobot below).
+const NOROBOT=qp.has('id')&&!qp.get('id').trim(), NOROBOT_SAY='No robot connected. Connect a robot to use this.';
+function noRobot(){ if(!NOROBOT) return false; if($('st').textContent!==NOROBOT_SAY) trace(NOROBOT_SAY,'net'); $('st').textContent=NOROBOT_SAY; $('ladres').textContent=NOROBOT_SAY; $('gsres').textContent=NOROBOT_SAY; return true; }
 // Explicit test link only. No saved preference and no automatic fallback or mid-run mode changes.
 const basicForward=qp.get('forwardbasic')==='1';
 let walker=null, base=null, mode='idle';
@@ -184,7 +202,7 @@ var forwardSensors=basicForward?new window.GBForwardBasic.Sensors():forwardColle
 forwardSensors.engine=basicForward?window.GBForwardBasic:forwardChoice;
 var forwardRunner=new window.GBTesterForward.Runner({
  now:function(){return performance.now();}, later:function(f,t){return setTimeout(f,t);}, clear:function(t){clearTimeout(t);},
- sample:function(){return basicForward?forwardSensors.sample:forwardSensors.sampleFor(forwardRunner.activeEngine);}, event:function(){return basicForward?forwardSensors.event:forwardSensors.eventFor(forwardRunner.activeEngine);}, cal:function(){var c=Object.assign({},cal);try{Object.assign(c,JSON.parse(localStorage.gb_walk_cal||'{}'));}catch(e){throw Error('invalid saved calibration');}return c;},
+ sample:function(){return basicForward?forwardSensors.sample:forwardSensors.sampleFor(forwardRunner.activeEngine);}, event:function(){return basicForward?forwardSensors.event:forwardSensors.eventFor(forwardRunner.activeEngine);}, cal:function(){var c=Object.assign({},cal);try{Object.assign(c,window.GBTrimStore.runtime(localStorage,(body&&body.id)||$('id').value));}catch(e){throw Error('invalid saved calibration');}delete c.TRIMS;delete c.TRIM_ACTIVE;return c;},
  ready:function(){return !!(benchForward&&body&&body.ready&&body.awake&&!document.hidden&&window.GBForwardWalk.flag(location.search)!=='0');},
  pose:function(l,r){sendLR(l,r);}, release:function(){mode='idle';if(body)body.stop();},
  status:function(t){$('st').textContent=t;$('ladres').textContent=t;trace(t,'mv');}
@@ -223,7 +241,7 @@ let imuFlip=1;   // platform accel convention: canonical = Android (+9.8 on the 
 let ori={a:0,b:0,g:0}, rate={a:0,b:0,g:0};
 let frames=0, hzT=0, hzTarget=25, loopIv=null;
 const cal={L_SIGN:-1,R_SIGN:1,L_OFF:0,R_OFF:0,IMU_SIGN:[1,-1,1],gain:1,turn:0};
-try{ Object.assign(cal, JSON.parse(localStorage.gb_walk_cal||'{}')); }catch(e){}
+try{ Object.assign(cal, window.GBTrimStore.runtime(localStorage,qp.get('id')||localStorage.gb_walk_id)); }catch(e){} delete cal.TRIMS; delete cal.TRIM_ACTIVE;
 
 // ── trace panel (brain/log, visible per the spec) ──
 const tEl=$('trace');
@@ -232,7 +250,7 @@ function trace(line,kind){ const d=document.createElement('div'); if(kind)d.clas
 // ── relay transport (the ONE shared module) ──
 let body=null;
 function makeBody(id){
-  forwardRunner.stop('pairing changed');
+  forwardRunner.stop('pairing changed'); stopGentle('pairing changed');
   if(body) body.close(); var settled=false;
   // fire the settle wiggle ONCE the body is both online AND ready — poll briefly so it never
   // gets skipped by the online-before-ready race (was: only checked at the status instant).
@@ -257,7 +275,8 @@ function makeBody(id){
 let _localPolicy = false;   // 0821: true while a policy loaded from a LOCAL FILE is active (never persisted, never re-fetchable)
 var polRef=qp.get('policy')||(window.GBForwardWalk.flag(location.search)==='0'?'official':'screen_forward');
 var polName=polRef==='screen_forward'?'Screen-forward walk':polRef==='official'?'Screen-backward walk':qp.get('name')||polRef;
-$('id').value = qp.get('id') || localStorage.gb_walk_id || 'bench';
+if(NOROBOT){ $('id').disabled=true; $('id').placeholder='no robot connected'; }
+else $('id').value = qp.get('id') || localStorage.gb_walk_id || 'bench';
 
 function policyUrl(ref){
   // 'official' = the SIMPLE ladder's 5-second walk AND the load-error fallback. Repointed to
@@ -359,7 +378,9 @@ function syncWalk(){
 }
 // Pull the latest Manual-tab calibration (signs + trim) right before a run — the iframes load once,
 // so trim set in Manual after this page loaded would otherwise stay stale here.
-function pullCal(){ try{ Object.assign(cal, JSON.parse(localStorage.gb_walk_cal||'{}')); }catch(e){} if(walker) walker.cal=cal; calEcho(); }
+// Stock directions are execution-local, matching the agent. Explicit stockdir=0 keeps legacy saved signs.
+// Read at every pull so this already-open tab still picks up this robot's newer trims; never write signs back.
+function pullCal(){ try{ Object.assign(cal,{L_SIGN:-1,R_SIGN:1},window.GBTrimStore.runtime(localStorage,(body&&body.id)||$('id').value)); }catch(e){} delete cal.TRIMS; delete cal.TRIM_ACTIVE; if(qp.getAll('stockdir').indexOf('0')<0) Object.assign(cal,{L_SIGN:-1,R_SIGN:1}); if(walker) walker.cal=cal; calEcho(); }
 
 /* ── CALIBRATION ECHO / DIRECTION SELF-CHECK (0727, after the backwards-direction field test) ──
    Three distinct failure modes made "which way is forward?" unanswerable from this tab:
@@ -387,7 +408,7 @@ function calEcho(){
   const swap=!!raw.SWAP;
   // stored-but-never-applied: present in the shared key, not consumed here, and not the
   // downstream-owned SWAP/IMU_SIGN — i.e. a Manual-tab setting this tab silently ignores.
-  const known=CAL_KEYS.concat(['SWAP','IMU_SIGN']);
+  const known=CAL_KEYS.concat(['SWAP','IMU_SIGN','TRIMS','TRIM_ACTIVE']);
   const ignored=Object.keys(raw).filter(k=>!known.includes(k));
   // page-vs-walker divergence: the run would use a different number than this tab believes
   const drift=CAL_KEYS.filter(k=>Number(eff[k])!==Number(cal[k]));
@@ -403,11 +424,15 @@ function calEcho(){
   const imu=(eff.IMU_SIGN||[1,1,1]).map(v=>v>0?'+':'−').join('');
   h+=' · IMU '+imu+(imuDropped?' <span class=bad>(NOT applied)</span>':' <span class=ok>(applied)</span>');
   if(swap) h+='<br><span class=bad>⚠ Left/right legs are SWAPPED, so this walk steers the WRONG WAY.</span> Turning is mirrored (left↔right) because the swap happens after the steering math. Straight-ahead still looks right, which is why this hides. Fix: Calibrate tab → re-run the which-leg test and turn SWAP off.';
-  if(imuDropped) h+='<br><span class=bad>⚠ IMU sign flips do NOT reach this policy</span>: it declares frame:'+walker.frame+', which places the axes itself and overrides the Calibrate tab\'s IMU toggles. Flipping roll/pitch/yaw there will not change this walk; fix direction with L_SIGN/R_SIGN instead.';
+  if(imuDropped) h+='<br><span class=bad>⚠ IMU sign flips do NOT reach this policy</span>: it declares frame:'+walker.frame+', which places the axes itself and overrides the Calibrate tab\'s IMU toggles (EXPERT). Flipping roll/pitch/yaw there will not change this walk.';
+  // Warn only when the old saved pair is actually driving this walk (stock execution ignores it).
+  // The explicit stockdir=0 rollback still reads it; Calibrate can delete just those two keys.
+  const oldSigns=!benchSpin&&(eff.L_SIGN!==-1||eff.R_SIGN!==1)&&!!raw&&typeof raw==='object'&&((('L_SIGN' in raw)&&raw.L_SIGN!==-1)||(('R_SIGN' in raw)&&raw.R_SIGN!==1));
+  if(oldSigns) h+='<br><span class=bad>⚠ Old leg directions are still saved on this phone (L_SIGN '+n(eff.L_SIGN)+', R_SIGN '+n(eff.R_SIGN)+', stock is -1/+1), so this walk drives a leg the wrong way.</span> Fix: Calibrate tab → use the stock leg directions.';
   if(ignored.length) h+='<br><span class=bad>⚠ stored but ignored by this tab: '+ignored.join(', ')+'</span>';
   if(drift.length)   h+='<br><span class=bad>⚠ walker/page cal drift on: '+drift.join(', ')+' — the run used the walker copy.</span>';
   if(!Object.keys(raw).length) h+='<br><span class=bad>⚠ gb_walk_cal is EMPTY: nothing was saved in the Calibrate tab, so these are code defaults.</span>';
-  const bad=!!(swap||ignored.length||drift.length||imuDropped);
+  const bad=!!(swap||ignored.length||drift.length||imuDropped||oldSigns);
   el.innerHTML=h;
   el.className=bad?'warn':'';
   // SIMPLE mode is the guided field-test flow: keep the newbie path clean, but never let a real
@@ -427,7 +452,7 @@ function calEcho(){
   }catch(e){}
 }
 window.addEventListener('storage',e=>{ if(e.key==='gb_walk_cal') pullCal(); });   // Manual tab is a sibling iframe: re-echo the moment it saves
-window.P=function(){ if(benchForward)return; cal.gain=+$('gn').value/100; syncWalk(); restartLoop(); };   // gain only now (cadence/turn sliders removed 0728)
+window.P=function(){ if(benchForward)return; if(noRobot()){ $('gn').value=Math.round(cal.gain*100); return; } cal.gain=+$('gn').value/100; syncWalk(); restartLoop(); };   // gain only now (cadence/turn sliders removed 0728). 10-14: a look (no robot) saves nothing
 $('zero').onclick=()=>{
  if(benchSpin){
   $('stop').onclick();
@@ -517,7 +542,7 @@ $('locbtn').onclick = async () => {
 };
 
 async function wake(){
-  try{
+  if(!NOROBOT) try{   // 10-14: a look (no robot) runs nothing, so a desktop that denies motion permission can still open the tab
     const pmo=(window.DeviceMotionEvent&&DeviceMotionEvent.requestPermission)?await DeviceMotionEvent.requestPermission():'granted';
     const por=(window.DeviceOrientationEvent&&DeviceOrientationEvent.requestPermission)?await DeviceOrientationEvent.requestPermission():'granted';
     if(pmo!=='granted'||por!=='granted'){ alert('need motion + orientation permission to run the walk policy'); return; }
@@ -527,8 +552,8 @@ async function wake(){
      rotationRate between events REGRESSED the walk: rotationRate is body angular velocity, and Euler
      rates only equal body rates near zero tilt — this robot sits at ~40°, so the integration drifts
      and the 5Hz absolute correction cannot catch it. Kept (opt-in) in tester/minimal.html for A/B. */
-  window.addEventListener('deviceorientation',e=>{ forwardSensors.orientation(e,performance.now()); if(e.alpha==null)return; orientationSeen=true; ori={a:e.alpha,b:e.beta,g:e.gamma}; if(!base)base={...ori}; });
-  window.addEventListener('devicemotion',e=>{ forwardSensors.motion(e,performance.now()); motionAt=performance.now(); const rr=e.rotationRate; if(rr) rate={a:rr.alpha||0,b:rr.beta||0,g:rr.gamma||0};
+  window.addEventListener('deviceorientation',e=>{ forwardSensors.orientation(e,performance.now()); gsSensors.orientation(e,performance.now()); if(e.alpha==null)return; orientationSeen=true; ori={a:e.alpha,b:e.beta,g:e.gamma}; if(!base)base={...ori}; });
+  window.addEventListener('devicemotion',e=>{ forwardSensors.motion(e,performance.now()); gsSensors.motion(e,performance.now()); motionAt=performance.now(); const rr=e.rotationRate; if(rr) rate={a:rr.alpha||0,b:rr.beta||0,g:rr.gamma||0};
     const ag=e.accelerationIncludingGravity; if(ag) accel={x:ag.x||0,y:ag.y||0,z:ag.z||0}; });   // raw accel for steerable policies
   $('start').style.display='none'; $('ui').style.display='flex';
   if(SIMPLE) ladShow();   // guided ladder replaces the expert controls (same machinery underneath)
@@ -537,14 +562,15 @@ async function wake(){
 }
 $('start').addEventListener('click', wake);
 
-function connect(){ const id=($('id').value.trim()||'bench'); localStorage.gb_walk_id=id; makeBody(id); }
+function connect(){ if(noRobot()) return; const id=($('id').value.trim()||'bench'); const active=window.GBTrimStore.boot(localStorage,id,localStorage.gb_walk_id); if(active.boot&&active.boot.err){$('st').textContent='Could not load this robot’s saved trim. Reload before connecting.';return;} localStorage.gb_walk_id=id; makeBody(id); pullCal(); }
 $('id').addEventListener('change',connect);
 
 // modes — the timed RUN WALK is the only walk trigger (hold-to-walk removed: a mid-stride release left the policy mid-gait)
-function setMode(m){ if(m!=='forward')forwardRunner.stop('stopped'); mode=m; }
+function setMode(m){ if(m!=='forward')forwardRunner.stop('stopped'); if(m!=='gentle')stopGentle('stopped'); mode=m; }   // 10-14: any other mode also ends a gentle spin (one motion at a time)
 
 let autoTimer=null, autoEnd=0, restTimer=null;
 $('walkn').onclick=()=>{
+  if(noRobot()) return;
   if(benchForward){
     clearTimeout(autoTimer);clearTimeout(restTimer);setMode('idle');if(body)body.stop();
     try{
@@ -567,10 +593,10 @@ $('walkn').onclick=()=>{
     var SW=window.GBSpinWire, rawCal={}, sel=null, ccw=spinDir==='left', wd=null;
     var sgn=function(v){ return (+v>0?'+':'')+(+v||0); };
     if(!SW){ spinRun=null; $('st').textContent='Spin wiring did not load. Reload this tab.'; trace('spin blocked: /spin-wire.js did not load','err'); return; }
-    try{ rawCal=JSON.parse(localStorage.gb_walk_cal||'{}')||{}; }catch(e){}
+    try{ rawCal=window.GBTrimStore.runtime(localStorage,(body&&body.id)||$('id').value); delete rawCal.TRIMS; delete rawCal.TRIM_ACTIVE; }catch(e){}
     sel=SW.select({flag:SW.flag(location.search),swap:!!rawCal.SWAP,body:null});
     if(sel.refuse){ spinRun=null; $('st').textContent='Spin blocked: '+sel.refuse; trace('spin blocked: '+sel.refuse,'err'); return; }
-    try{ wd=SW.apply(walker,sel,ccw); }catch(e){ spinRun=null; $('st').textContent='Spin blocked: '+e.message; trace('spin blocked: '+e.message,'err'); return; }
+    try{ wd=SW.apply(walker,sel,ccw); wd.phoneSigns=[rawCal.L_SIGN===undefined?-1:rawCal.L_SIGN,rawCal.R_SIGN===undefined?1:rawCal.R_SIGN]; }catch(e){ spinRun=null; $('st').textContent='Spin blocked: '+e.message; trace('spin blocked: '+e.message,'err'); return; }
     spinRun={sel:sel,ccw:ccw};
     if(walker.reset)walker.reset();
     const g=Math.hypot(accel.x,accel.y,accel.z);
@@ -579,7 +605,7 @@ $('walkn').onclick=()=>{
     const secs=Math.max(1,Math.min(30,+$('nsec').value||5));
     cmd={fwd:1,yaw:0,mode:1}; setMode('walk'); autoEnd=performance.now()+secs*1000;
     $('st').textContent='spinning '+spinDir+' '+secs+'s · flat reference';
-    trace('spin bench start: '+spinDir+' ('+(ccw?'CCW':'CW')+' from above), '+secs+'s, manual flat zero · wire '+wd.wire+' · SWAP '+(rawCal.SWAP?'ON':'off')+' · signs L'+sgn(wd.signs[0])+' R'+sgn(wd.signs[1])+(wd.phoneSigns.length===2&&(wd.phoneSigns[0]!==wd.signs[0]||wd.phoneSigns[1]!==wd.signs[1])?' (stored L'+sgn(wd.phoneSigns[0])+' R'+sgn(wd.phoneSigns[1])+', kept for walk)':'')+' · trim '+sgn(wd.trim[0])+'/'+sgn(wd.trim[1])+' · gain '+cal.gain+' · IMU '+wd.imu.map(sgn).join(',')+' · gyro '+wd.gyro,'mv');
+    trace('spin bench start: '+spinDir+' ('+(ccw?'CCW':'CW')+' from above), '+secs+'s, manual flat zero · wire '+wd.wire+' · SWAP '+(rawCal.SWAP?'ON':'off')+' · signs L'+sgn(wd.signs[0])+' R'+sgn(wd.signs[1])+(wd.phoneSigns.length===2&&(wd.phoneSigns[0]!==wd.signs[0]||wd.phoneSigns[1]!==wd.signs[1])?' (stored L'+sgn(wd.phoneSigns[0])+' R'+sgn(wd.phoneSigns[1])+', saved)':'')+' · trim '+sgn(wd.trim[0])+'/'+sgn(wd.trim[1])+' · gain '+cal.gain+' · IMU '+wd.imu.map(sgn).join(',')+' · gyro '+wd.gyro,'mv');
     if(sel.wire==='legacy_swap') trace('SWAP is on, so this spin runs the old wiring: the corrected one is only tested with SWAP off','err');
     try{ console.info('[growbot] spin_start '+JSON.stringify(Object.assign({dir:spinDir,swap:rawCal.SWAP?1:0},wd,{secs:secs,gain:cal.gain}))); }catch(e){}
     autoTimer=setTimeout(()=>{setMode('idle');if(body)body.stop();$('st').textContent='done — '+secs+'s spin';},secs*1000);
@@ -611,9 +637,9 @@ $('walkn').onclick=()=>{
     autoTimer=setTimeout(()=>{ clearInterval(iv); setMode('idle'); if(body)body.stop(); $('st').textContent='done — '+secs+'s walk, legs limp'; trace('walk done ('+secs+'s)','mv'); }, secs*1000);
   }, 1200);
 };
-document.addEventListener('visibilitychange',()=>{if(document.hidden&&(benchSpin||benchForward))$('stop').onclick();});
-window.addEventListener('pagehide',function(){forwardRunner.stop('page hidden');});
-$('rest').onclick=()=>{ pullCal(); clearTimeout(autoTimer); clearTimeout(restTimer); setMode('rest'); $('st').textContent='REST — centering, limps in 2s'; trace('rest (neutral 90 → auto-limp 2s)','mv');
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&(benchSpin||benchForward||gentleRunner.active))$('stop').onclick();});
+window.addEventListener('pagehide',function(){forwardRunner.stop('page hidden');stopGentle('page hidden');});
+$('rest').onclick=()=>{ if(noRobot()) return; pullCal(); clearTimeout(autoTimer); clearTimeout(restTimer); setMode('rest'); $('st').textContent='REST — centering, limps in 2s'; trace('rest (neutral 90 → auto-limp 2s)','mv');
   restTimer=setTimeout(()=>{ setMode('idle'); if(body)body.stop(); $('st').textContent='idle — legs limp (rest released)'; trace('rest auto-released → limp','mv'); }, 2000); };
 $('stop').onclick=()=>{ clearTimeout(autoTimer); clearTimeout(restTimer); setMode('idle'); if(body)body.stop(); $('st').textContent='STOP — silent, legs limp via dead-man'; trace('STOP','mv'); };
 
@@ -671,32 +697,89 @@ function loop(){
   // idle: send nothing -> firmware dead-man limps within 500ms
 }
 
+/* ── GENTLE SPIN, 10-14 (Brit: "move tab - missing our new gentle spin, let's add both"). The creature's own R3
+   normal spin, the one next.html's runNormalSpin runs by default: the same /normal-spin.js, the same SHA-checked
+   cw/ccw policies, the same GBNormalSpin.Controller fed the same gravity-signed gyro+gravity sample (gsSensors,
+   the shape of next.html's _forwardSample) through the same GBForwardWalk frame, at its 25 Hz deadline, by the
+   tester runner the forward walk uses. Signs are fixed inside the Controller (-1/-1, gain .99 via
+   GBForwardWalk.calibration), your trims are added there, SWAP is refused, and gb_walk_cal is never written.
+   Two differences from the creature, both on purpose for a bench button: no stall handoff to the larger
+   spin v4 escape (the creature's ?spinstall=0), and the legs let go at the end instead of its rest stance. ── */
+var gsSensors=new window.GBTesterForward.Sensors(), gsSerial=0, gsPolicies={};
+function gsEngine(key){ var F=window.GBForwardWalk, N=window.GBNormalSpin;   // read at click time: the walk tests run this page without normal-spin.js
+  return {LABEL:'gentle spin '+(key==='ccw'?'left':'right'), frame:F.frame, calibration:F.calibration, nextDeadline:F.nextDeadline,
+    Controller:function(p,c,s,now){ return new N.Controller(p,c,s,now,key); }}; }
+var gentleRunner=new window.GBTesterForward.Runner({
+ now:function(){return performance.now();}, later:function(f,t){return setTimeout(f,t);}, clear:function(t){clearTimeout(t);},
+ sample:function(){return gsSensors.sample;}, event:function(){return gsSensors.event;}, cal:function(){return forwardRunner.h.cal();},
+ ready:function(){return !!(body&&body.ready&&body.awake&&!document.hidden);},
+ pose:function(l,r){sendLR(l,r);}, release:function(){mode='idle';if(body)body.stop();},
+ status:function(t){ t=String(t).replace(/^walking /,'').replace(/ walk, legs released$/,', legs released');   // the shared runner words its lines for a walk
+  $('gsres').textContent=t; $('st').textContent=t; trace(t,'mv'); }
+});
+function stopGentle(why){ gsSerial++; if(gentleRunner) gentleRunner.stop(why); }   // also drops a spin whose policy is still loading
+function gsSay(t){ $('gsres').textContent=t; $('st').textContent=t; trace(t,'err'); }
+// normal-spin.js select()'s refusals (its own and GBForwardWalk.select's), said plainly; an unknown one keeps its code
+var GS_WHY={swap:'Gentle spin needs the left/right swap off. Turn it off in Calibrate first.',
+ invalid_trims:'Gentle spin needs trims between -45 and 45. Fix them in Calibrate.',
+ gyro_unavailable:'This browser is not giving rotation readings. Check motion access, then try again.',
+ unsupported_body:'Gentle spin runs only on the stock two-leg body.',
+ rollback:'Gentle spin is switched off by this page address (normalspin=0).',
+ legacy_wiring_test:'Gentle spin is off while this page address has spinwire=0.',
+ diy_experiment:'Gentle spin is off while this page address has a diygait test.'};
+function gentleSpin(dir){
+  if(noRobot()) return;
+  var N=window.GBNormalSpin, key=dir==='left'?'ccw':'cw', c;
+  clearTimeout(autoTimer); clearTimeout(restTimer); setMode('idle'); if(body) body.stop();   // one motion at a time: ends any walk, spin, rest or earlier gentle spin
+  if(!N||!window.GBForwardWalk){ gsSay('Gentle spin did not load. Reload this tab.'); return; }
+  if(!body||!body.ready||!body.awake){ gsSay('Robot offline. Reconnect before running.'); return; }
+  try{ c=forwardRunner.h.cal(); }catch(e){ gsSay(e.message); return; }
+  var sel=N.select({id:'growbot-85mm-2leg'},c,location.search,gsSensors.event);
+  if(!sel.on){ gsSay(GS_WHY[sel.why]||('Gentle spin is off here ('+sel.why+').')); return; }
+  var my=++gsSerial; $('gsres').textContent='loading gentle spin '+dir+'…';
+  if(!gsPolicies[key]) gsPolicies[key]=N.load(key,fetch,window.crypto).catch(function(e){ delete gsPolicies[key]; throw e; });
+  gsPolicies[key].then(function(p){
+    if(my!==gsSerial) return;   // STOP, another button or a policy change landed while it loaded
+    setMode('gentle'); gentleRunner.engine=gsEngine(key);
+    try{ gentleRunner.start(p,5); }catch(e){ setMode('idle'); gsSay(e.message); }
+  },function(e){ if(my===gsSerial) gsSay('Gentle spin unavailable: '+e.message); });
+}
+$('gsright').onclick=function(){ gentleSpin('right'); };
+$('gsleft').onclick=function(){ gentleSpin('left'); };
+$('gsstop').onclick=function(){ $('stop').onclick(); };
+
 /* ── SIMPLE-mode guided ladder (0715): a friendly front onto the SAME machinery. Rung 1's swap
       answer writes gb_walk_cal.SWAP (the key relay-transport already reads everywhere), rung 2
       IS the real RUN WALK. The calibration was always shared through gb_walk_cal, so there is nothing
-      to hand off. Expert mode leaves this page byte-identical in behavior. ── */
-const SIMPLE=(function(){ try{ return (localStorage.gb_ui_mode||'simple')!=='expert'; }catch(e){ return true; } })();
+      to hand off. Expert mode leaves this page byte-identical in behavior.
+      10-14 (Brit: "always default to simple mode for all tabs"): the mode comes from the shell's &ui=expert for
+      this visit only, never from localStorage, so every load starts SIMPLE. ── */
+const SIMPLE=qp.get('ui')!=='expert';
 let lad={walk:0}; try{ Object.assign(lad,JSON.parse(localStorage.gb_ladder_policy||'{}')); }catch(e){}
 function ladSave(){ try{ localStorage.gb_ladder_policy=JSON.stringify(lad); }catch(e){} }
 function ladPaint(){ $('ladr').className='rung '+(lad.walk?'done':'live'); $('ladn').textContent=lad.walk?'✓':'→'; }
 function ladShow(){
   // #calecho is exempt: calEcho() owns its own visibility here and shows it ONLY when something is
   // actually wrong, so a direction mismatch still reaches the guided (field-test) flow.
-  document.querySelectorAll('.wrap>*').forEach(el=>{ if(el.id!=='ladder'&&el.id!=='quickpolicies'&&el.id!=='forwardhelp'&&el.id!=='forwardstatus'&&el.id!=='calecho'&&!el.classList.contains('top')) el.style.display='none'; });
+  document.querySelectorAll('.wrap>*').forEach(el=>{ if(el.id!=='ladder'&&el.id!=='quickpolicies'&&el.id!=='forwardhelp'&&el.id!=='forwardstatus'&&el.id!=='calecho'&&el.id!=='gentlespin'&&!el.classList.contains('top')) el.style.display='none'; });
   $('ladder').style.display='flex'; ladPaint(); calEcho();policyChoiceUI();
 }
-$('ladwalk').onclick=()=>{ if(!body||!body.ready){ $('ladres').textContent='no body yet, check the pairing code above'; return; }
+$('ladwalk').onclick=()=>{ if(noRobot()) return; if(!body||!body.ready){ $('ladres').textContent='no body yet, check the pairing code above'; return; }
   if(!walker&&!benchForward){ $('ladres').textContent='the walk policy is still loading, give it a moment'; return; }
   $('nsec').value=5; $('ladask').classList.remove('show'); $('ladres').textContent='walking 5s…';
   $('walkn').onclick();
   if(benchForward)return;
+  /* 10-14 (Brit: "remove the 'it walked' or 'it leaned or split' buttons from 'spin'"): no verdict after a spin.
+     Those two buttons only set gb_ladder_policy.walk=1, which turns this rung's number into a ✓ (ladPaint);
+     nothing else reads it and nothing is logged. The rung just repeats the spin's own status instead. */
+  if(benchSpin){ $('ladres').textContent=$('st').textContent; setTimeout(()=>{ if(benchSpin) $('ladres').textContent=$('st').textContent; },5600); return; }
   setTimeout(()=>{ $('ladres').textContent='how did it look?'; $('ladask').classList.add('show'); },5600); };
 document.querySelectorAll('#quickpolicies button').forEach(function(b){b.onclick=function(){choosePolicy(b.dataset.policy);};});
 $('ladstop').onclick=function(){$('stop').onclick();};
 $('ladzero').onclick=function(){$('zero').onclick();};
 $('ladyes').onclick=()=>{ lad.walk=1; ladSave(); ladPaint(); $('ladres').textContent='nice, that\'s the walk.'; $('ladask').classList.remove('show'); };
 $('ladno').onclick=()=>{ lad.walk=1; ladSave(); ladPaint(); $('ladres').textContent='saved anyway. go back to Calibrate to fix the legs, then walk again here.'; $('ladask').classList.remove('show'); };
-$('lesc').onclick=()=>{ try{ localStorage.gb_ui_mode='expert'; }catch(e){}
+$('lesc').onclick=()=>{   // 10-14: tells the shell only (its seg, and &ui=expert on the next mount); nothing is stored
   if(window.parent!==window) parent.postMessage({gb:'mode',mode:'expert'},'*');
   document.querySelectorAll('.wrap>*').forEach(el=>{ el.style.display=''; }); $('ladder').style.display='none';policyChoiceUI(); };
 </script></body></html>

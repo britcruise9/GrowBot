@@ -10,28 +10,43 @@
     shiver:{sound:"rumble",points:[[0,0,300],[2,7,700],[-2,-7,700],[2,7,700],[-2,-7,700],[2,7,700],[0,0,1000]]},
     droop:{sound:"yawn",points:[[0,0,300],[-9,3,2200],[-6,-3,1700],[0,0,2300]]}
   };
+  /* 1015 LOUDER (Brit's bench 10-15, 09:28:56 "purr like a cat": only the purr played, 5.85 s at ~105 Hz, and the
+     phone speaker gave almost nothing). level is the phrase's peak on the shared output gain (_gbOut, the volume knob):
+     the old 0.10-0.12 sat 17-19 dB under a song (singGain 0.9), now 0.50-0.60, still under a song, same order as before.
+     PEAK is the envelope top; a point's gain (0-1) scales under it, so model contours keep their meaning. */
+  var PEAK=0.6;
   var sounds={
-    purr:{seconds:5.8,hz:[105,112,102],pulse:25,depth:0.65,level:0.12},
-    rumble:{seconds:5.8,hz:[75,110,82],pulse:22,depth:0.5,level:0.12},
-    sigh:{seconds:5.8,hz:[370,220,120],pulse:4.8,depth:0.08,level:0.11},
-    yawn:{seconds:6.3,hz:[150,390,135],pulse:5.2,depth:0.15,level:0.11},
-    giggle:{seconds:2.8,hz:[430,610,360],pulse:4.5,depth:0.96,level:0.10}
+    purr:{seconds:0.9,hz:[105,112,102],pulse:25,depth:0.65,level:0.6},
+    rumble:{seconds:1,hz:[75,110,82],pulse:22,depth:0.5,level:0.6},
+    sigh:{seconds:0.9,hz:[370,220,120],pulse:4.8,depth:0.08,level:0.55},
+    yawn:{seconds:1.2,hz:[150,390,135],pulse:5.2,depth:0.15,level:0.55},
+    giggle:{seconds:0.65,hz:[430,610,360],pulse:4.5,depth:0.96,level:0.5}
   };
+  /* 1015 LOW REGISTER: a phone speaker plays almost nothing under ~300 Hz, and the warm table below puts 0.05 of its
+     peak at the 4th harmonic, so a 105 Hz purr reached the speaker band (400 Hz up) at -48 dBFS (modelled: the carrier
+     at the old envelope top). A contour that stays under LOW_HZ is voiced with ten harmonics instead, so the ear still
+     hears the low pitch (the fundamental stays the strongest harmonic) while 400-1100 Hz carries the sound: the same
+     purr is -14 dBFS above 400 Hz at the new level. Schroeder phases keep the normalised wave's peak low, so its overall
+     level matches the warm table's; the fundamental only gives up share (0.59 to 0.33 of peak) to what a phone plays. */
+  var LOW_HZ=250, WARM=[[0,1,0.45,0.18,0.08],[0,0,0,0,0]], LOW_MAG=[1,0.8,0.75,0.75,0.7,0.6,0.5,0.4,0.3,0.2];
+  function lowWave(){ var re=[0],im=[0]; for(var n=1;n<=LOW_MAG.length;n++){ var p=Math.PI*n*(n-1)/LOW_MAG.length; re.push(LOW_MAG[n-1]*Math.cos(p)); im.push(-LOW_MAG[n-1]*Math.sin(p)); } return [re,im]; }
   function soundName(x){ x=String(x||"").toLowerCase().trim(); if(x==="truck"||x==="engine")x="rumble"; return Object.prototype.hasOwnProperty.call(sounds,x)?x:""; }
   // Seeds are starting contours, not a vocabulary limit. The model may supply its own
   // time/pitch/pulse/energy points, with or without a seed. No code or audio URLs.
   function soundPlan(input){
     var object=input&&typeof input==="object"&&!Array.isArray(input),name=typeof input==="string"?soundName(input):object?soundName(input.seed):"";
     if(!object&&!name)return null;
-    if(object&&Object.keys(input).some(function(k){return k!=="seed"&&k!=="points";}))return null;
+    if(object&&Object.keys(input).some(function(k){return k!=="seed"&&k!=="points"&&k!=="ms";}))return null;
     if(object&&Object.prototype.hasOwnProperty.call(input,"seed")&&(typeof input.seed!=="string"||!name))return null;
+    if(object&&Object.prototype.hasOwnProperty.call(input,"ms")&&(Object.prototype.hasOwnProperty.call(input,"points")||!name||typeof input.ms!=="number"||!Number.isFinite(input.ms)||input.ms<120||input.ms>12000))return null;
     var s=name?sounds[name]:null,source=object&&Object.prototype.hasOwnProperty.call(input,"points")?input.points:null;
     if(source===null){
       if(!s||object&&Object.prototype.hasOwnProperty.call(input,"points"))return null;
-      return {name:name,seed:name,ms:s.seconds*1000,points:[0,0.42,1].map(function(t,i){return {ms:t*s.seconds*1000,hz:s.hz[i],pulse:s.pulse,depth:s.depth,gain:s.level/0.12};})};
+      var ms=object&&Object.prototype.hasOwnProperty.call(input,"ms")?input.ms:s.seconds*1000;
+      return {name:name,seed:name,ms:ms,points:[0,0.42,1].map(function(t,i){return {ms:t*ms,hz:s.hz[i],pulse:s.pulse,depth:s.depth,gain:s.level/PEAK};})};
     }
     if(!Array.isArray(source)||source.length<2||source.length>16)return null;
-    var prev={ms:-1,hz:s?s.hz[0]:240,pulse:s?s.pulse:0,depth:s?s.depth:0,gain:s?s.level/0.12:0.8},points=[];
+    var prev={ms:-1,hz:s?s.hz[0]:240,pulse:s?s.pulse:0,depth:s?s.depth:0,gain:s?s.level/PEAK:0.8},points=[];
     for(var i=0;i<source.length;i++){
       var p=source[i];if(!p||typeof p!=="object"||Array.isArray(p)||Object.keys(p).some(function(k){return ["ms","hz","pulse","depth","gain"].indexOf(k)<0;}))return null;
       if(typeof p.ms!=="number"||!Number.isFinite(p.ms)||p.ms<0||p.ms>12000||p.ms<=prev.ms||(i===0&&p.ms!==0))return null;
@@ -56,32 +71,30 @@
     if(peak<5||peak>15)return null;
     return {name:name,sound:r.sound,steps:steps,ms:steps.reduce(function(a,s){return a+s.ms;},0),peak:peak};
   }
+  /* 1015 OPEN BENCH: what still keeps a body expression to sound only. No floor confirmation, sensor freshness,
+     handling, upright, busy or opening-words test any more: a body expression is an ordinary gesture (moveLegs owns
+     band, slew, takeover, Stop, page hide and disconnect), so only the person's stop words, pause, sleep and legs that
+     are not there say no. */
   function gate(s){
-    if(!s.bench)return "held_detection_unproven"; // stillness and orientation cannot prove not-held
-    if(!s.explicit)return "explicit_expression_required";
+    if(!s.bench)return "held_detection_unproven"; // default users: no body expressions (a still phone can be held)
     if(s.inhibited)return "person_asked_still";
     if(s.paused)return "paused";
     if(s.asleep)return "asleep";
     if(!s.online)return "no_body";
-    if(s.busy)return "busy";
-    if(!s.floorConfirmed)return "confirm_floor_for_bench";
-    if(!s.sensorFresh)return "sensor_missing_or_stale";
-    if(s.handling)return "handling";
-    if(!s.upright)return "not_upright";
-    if(!s.stanceKnown)return "stance_unknown";
     return "";
   }
   function playSound(ctx,out,input){
     var s=soundPlan(input);if(!s||!ctx||!out)return null;
     var t=ctx.currentTime+0.025,end=t+s.ms/1000,o=ctx.createOscillator(),g=ctx.createGain(),voice=ctx.createGain(),amp=ctx.createGain(),lfo=ctx.createOscillator(),depth=ctx.createGain();
-    // Warm harmonics retain the instrument's voice and make a low carrier audible on phone speakers.
-    try{o.setPeriodicWave(ctx.createPeriodicWave(new Float32Array([0,1,0.45,0.18,0.08]),new Float32Array([0,0,0,0,0])));}catch(e){o.type="triangle";}
+    var low=s.points.every(function(p){return p.hz<LOW_HZ;}),w=low?lowWave():WARM;
+    // Warm harmonics retain the instrument's voice; a low contour gets the ten-harmonic table above (LOW REGISTER).
+    try{o.setPeriodicWave(ctx.createPeriodicWave(new Float32Array(w[0]),new Float32Array(w[1])));}catch(e){o.type=low?"sawtooth":"triangle";}
     s.points.forEach(function(p,i){var at=t+p.ms/1000,method=i?"linearRampToValueAtTime":"setValueAtTime";
       o.frequency[i?"exponentialRampToValueAtTime":"setValueAtTime"](p.hz,at);
       amp.gain[method](1-p.depth/2,at);depth.gain[method](p.depth/2,at);lfo.frequency[method](p.pulse,at);voice.gain[method](p.gain,at);
     });
     lfo.connect(depth); depth.connect(amp.gain); o.connect(amp); amp.connect(voice);voice.connect(g); g.connect(out);
-    g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(0.12,t+Math.min(0.18,s.ms/4000)); g.gain.setValueAtTime(0.12,end-Math.min(0.35,s.ms/4000)); g.gain.linearRampToValueAtTime(0.0001,end);
+    g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(PEAK,t+Math.min(0.18,s.ms/4000)); g.gain.setValueAtTime(PEAK,end-Math.min(0.35,s.ms/4000)); g.gain.linearRampToValueAtTime(0.0001,end);
     o.start(t); lfo.start(t); o.stop(end+0.025); lfo.stop(end+0.025);
     var done=false; function disconnect(){[o,lfo,depth,amp,voice,g].forEach(function(n){try{n.disconnect();}catch(e){}});}
     o.onended=disconnect;
@@ -89,7 +102,7 @@
       // Keep the current envelope value and release over 12 ms instead of a discontinuous cut.
       // The fallback evaluates this simple envelope for browsers without cancelAndHoldAtTime.
       try{if(typeof g.gain.cancelAndHoldAtTime==="function")g.gain.cancelAndHoldAtTime(n);
-        else{var attack=Math.min(0.18,s.ms/4000),release=Math.min(0.35,s.ms/4000),v=n<t?0.0001:n<t+attack?0.0001+(0.12-0.0001)*(n-t)/attack:n<end-release?0.12:n<end?0.0001+(0.12-0.0001)*(end-n)/release:0.0001;
+        else{var attack=Math.min(0.18,s.ms/4000),release=Math.min(0.35,s.ms/4000),v=n<t?0.0001:n<t+attack?0.0001+(PEAK-0.0001)*(n-t)/attack:n<end-release?PEAK:n<end?0.0001+(PEAK-0.0001)*(end-n)/release:0.0001;
           g.gain.cancelScheduledValues(n);g.gain.setValueAtTime(v,n);}
         g.gain.linearRampToValueAtTime(0,n+fade);o.stop(n+fade);lfo.stop(n+fade);
       }catch(e){disconnect();}}};

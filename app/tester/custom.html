@@ -82,10 +82,14 @@ code{background:#101826;border-radius:5px;padding:1px 5px;font-size:11px}
 <script src="/normal-spin.js?v=1005"></script>
 <script src="/forward-basic.js?v=1001"></script>
 <script type="module" src="/forward-choice.mjs?v=1001"></script>
+<script src="/trim-store.js"></script>
 <script type="module">
 import { loadBodyTruth, SafeBody, AgentChannel, ForwardCapture } from '/agent-gateway.js';
 const $=id=>document.getElementById(id);
 const qp=new URLSearchParams(location.search);
+// 10-14 skip (no robot): an explicit EMPTY ?id= means no robot, face.html's rule. The /tester shell's skip mounts
+// this tab that way so it can be looked at on a desktop: no relay, no saved code, no 'bench', nothing sent.
+const NOROBOT=qp.has('id')&&!qp.get('id').trim(), NOROBOT_SAY='No robot connected. Connect a robot to use this.';
 
 const tEl=$('trace');
 function trace(line,kind){ const d=document.createElement('div'); if(kind)d.className=kind; d.textContent='> '+line; tEl.appendChild(d); while(tEl.childElementCount>160)tEl.removeChild(tEl.firstChild); tEl.scrollTop=tEl.scrollHeight; }
@@ -212,7 +216,7 @@ async function discover(){
 let loopGen=0;   // STOP class (0906): bumped on every stop; a reply that was in flight when STOP landed is discarded, never executed
 function stopLoop(){ running=false; loopGen++; $('run').textContent='START'; $('run').classList.remove('on'); paint(); }
 $('run').onclick=()=>{ if(running){ stopLoop(); trace('agent loop stopped','net'); return; }
-  if(!gate){ trace('no gateway — set a device id','err'); return; }
+  if(!gate){ trace(NOROBOT?NOROBOT_SAY:'no gateway — set a device id','err'); return; }   // 10-14: a look (skip, no robot) has its id field disabled, so say why instead
   if(!$('msel').value){ trace('no model — check the endpoint','err'); return; }
   running=true; hist=[]; $('run').textContent='STOP'; $('run').classList.add('on'); trace('agent loop started ('+$('msel').value+')','net'); loop(); };
 
@@ -251,10 +255,11 @@ async function loop(){
 }
 
 // ── wiring ──
-$('stop').onclick=()=>{ stopLoop(); if(gate){ if(gate.halt) gate.halt('operator'); else gate.stopMotion(); } trace('STOP — loop halted, legs limp','mv'); };
-function connect(){ stopLoop(); const id=($('id').value.trim()||'bench'); try{ localStorage.gb_walk_id=id; }catch(e){} boot(id); }   // changing the robot mid-drive stops the drive first
+$('stop').onclick=()=>{ stopLoop(); if(gate){ if(gate.halt) gate.halt('operator'); else gate.stopMotion(); } trace(NOROBOT?NOROBOT_SAY:'STOP — loop halted, legs limp','mv'); };
+function connect(){ stopLoop(); if(NOROBOT){ trace(NOROBOT_SAY,'net'); return; } const id=($('id').value.trim()||'bench'); try{ if(!window.GBTrimStore)throw Error('trim helper');const t=window.GBTrimStore.boot(localStorage,id,localStorage.getItem('gb_walk_id'),null,null);if(t.boot&&t.boot.err)throw Error('trim storage');localStorage.gb_walk_id=id; }catch(e){trace('Could not load this robot’s trim. Reload and try again.','err');return;} boot(id); }   // changing the robot mid-drive stops the drive first
 $('id').addEventListener('change',connect);
-$('id').value = qp.get('id') || (function(){ try{ return localStorage.gb_walk_id; }catch(e){ return ''; } })() || 'bench';
+if(NOROBOT){ $('id').disabled=true; $('id').placeholder='no robot connected'; }
+else $('id').value = qp.get('id') || (function(){ try{ return localStorage.gb_walk_id; }catch(e){ return ''; } })() || 'bench';
 $('start').addEventListener('click',()=>{ $('start').style.display='none'; $('ui').style.display='flex';
   requestMotion();
   try{ if(window.speechSynthesis){ const uu=new SpeechSynthesisUtterance(' '); uu.volume=0; speechSynthesis.speak(uu); } }catch(e){}   // unlock iOS TTS inside the tap

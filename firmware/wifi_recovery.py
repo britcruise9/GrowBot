@@ -20,9 +20,14 @@ HARDWARE_VALIDATED = True
 # home router at power-on (seen 0923 18:54: 75 s miss -> 13 min offline at home).
 WINDOW_MS = 1800000
 SESSION_MS = 600000
-RETRY_MS = 180000         # with nobody on the setup network, re-try the saved networks this often
+RETRY_MS = 180000         # with no scan possible (the watchdog is armed after a relay session), re-try the saved networks this often
 RETRY_HOME_MS = 60000     # ...and this often when the power-on scan SAW a saved network (0923 21:54:
                           # a battery swap missed home for 75 s, then sat 10 min in setup; home was right there)
+                          # 1021: also when that scan saw NONE (a power cut: the router boots minutes after the
+                          # robot), then each retry first takes a quick look and only joins if a saved name is there
+PAGE_HOLD_MS = 120000     # 1021: a request to the setup page holds retries this long (a person reading or typing)
+SESSION_HOLD_MS = SESSION_MS  # ...and an unlocked session for as long as it stays valid (1022: the page sends
+                          # nothing while a person types, and the 0923 cafe setup took 8.5 min)
 RETRY_JOIN_MS = 15000     # AP is down for at most this long per retry
 NEARBY_MAX = 15
 AUTH_LOCK_MS = 30000
@@ -224,7 +229,9 @@ class Recovery:
         # possible, the watchdog was armed) and a bounded join of the saved networks.
         self.nearby = None
         self.retry = None
-        self.visited = False
+        self.look = None          # 1021: quick "is a saved network in sight?" (None = cannot scan)
+        self.visited = False      # a phone has been on the setup network (telemetry only since 1021)
+        self.page_t = None        # last request to the setup page: a person is here
         self.last_retry = 0
         self.minted = []          # attempt ids handed out in THIS window (see /result)
         self.home_seen = None
@@ -412,12 +419,23 @@ class Recovery:
         except Exception:
             return None
 
+    def _person_active(self):
+        # 1021 (Brit's robot stopped trying home for 30 min because a phone had merely JOINED the setup
+        # network): only a person actually using the page holds the retries, never a phone's background
+        # DNS. A page request holds them PAGE_HOLD_MS, an unlocked session used recently SESSION_HOLD_MS.
+        now = self.now()
+        if self.page_t is not None and self.diff(now, self.page_t) < PAGE_HOLD_MS:
+            return True
+        return self.session is not None and self.diff(now, self.session_t) < SESSION_HOLD_MS
+
     def _retry_due(self):
-        # Never while a person is on the setup network, and never when the power-on scan saw
-        # none of the saved networks (a cafe: retrying would only drop the phone mid-setup).
-        if self.retry is None or self.visited or self.state != "setup" or self.home_seen is False:
+        # Never while a person is using the setup page. Every minute otherwise; every three when no scan
+        # is possible. 1021: a power-on scan that saw none of the saved networks no longer stops the retries
+        # for the whole window (a power cut: the router boots minutes after the robot); _retry_saved takes
+        # a quick look first, so a cafe phone loses the setup network only for the scan.
+        if self.retry is None or self.state != "setup" or self._person_active():
             return False
-        every = RETRY_HOME_MS if self.home_seen is True else RETRY_MS
+        every = RETRY_MS if self.home_seen is None else RETRY_HOME_MS
         return self.diff(self.now(), self.last_retry or self.started) >= every
 
     def _retry_saved(self):
@@ -425,6 +443,14 @@ class Recovery:
         self.state = "retrying"
         joined = False
         try:
+            if self.home_seen is not True and self.look is not None:
+                seen = self.look()                  # 1021: a quick scan first when home was not in sight
+                if seen is True:
+                    self.home_seen = True
+                elif seen is False:
+                    self.last_retry = self.now()
+                    self._open_ap()                 # nothing saved in sight: the AP was down only for the scan
+                    return
             joined = self.retry(RETRY_JOIN_MS) is True and self.wlan.isconnected()
         except Exception:
             joined = False
@@ -598,6 +624,7 @@ class Recovery:
                 try:
                     client, _ = self.server.accept()
                     self.visited = True
+                    self.page_t = self.now()        # 1021: a person is on the page (holds retries; DNS does not)
                     client.settimeout(0.4)
                     status, body = self.request(self._receive(client))
                     self._send(client, status, body, html)

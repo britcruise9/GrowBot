@@ -1,9 +1,9 @@
-/* Stock screen-up get-up preview, 0930. This file is NOT loaded by the live agent.
-   The get-up has its own tested wire convention; saved walk calibration stays untouched.
-   Math below is the existing agent port of Motion Lab's RECOVERY / Engine.tick.
-   Fixture provenance and exact-tick parity are checked by getupwiretest.js. */
+/* Shared stock screen-up get-up math, loaded by the agent and manual previews.
+   The original Motion Lab engine remains exact. An explicit host bench option adds a
+   tall settling glide; saved walk calibration stays untouched. getupwiretest.js pins
+   the old frames and the separately frozen tall-frame evidence. */
 (function(root){
-  var VERSION="stock-screen-up-0930-v1", BODY_ID="growbot-85mm-2leg";
+  var VERSION="stock-screen-up-1028-v2", BODY_ID="growbot-85mm-2leg";
   var REC_RECIPE={hz:1,amplitude:80,height:0,lean:0,ratio:1,direction:1,slew:400,direct:false,seconds:5};
   var REC_BLEND_MS=700, REC_GAP_S=.25;
   function finite(x){return typeof x==="number"&&isFinite(x);}
@@ -31,7 +31,7 @@
     if(lo>=hi)throw Error("invalid_servo_band");
     return [lo,hi];
   }
-  function select(body,source,mode){
+  function select(body,source,mode,bench){
     var band=bodyBand(body,mode),src=snapshot(source),cal=snapshot(src);
     cal.L_SIGN=-1;cal.R_SIGN=-1;cal.gain=.99;cal.turn=0;
     var neutral=_recServo([0,0],cal),foldRaw=_recServo(_recJoints(0),cal);
@@ -39,13 +39,19 @@
       foldRaw.some(function(v){return v<band[0]-5||v>band[1]+5;}))throw Error("outside_band");
     var out={version:VERSION,bodyId:BODY_ID,mode:mode,source:src,cal:cal,band:band,neutral:neutral,
       foldRaw:foldRaw,fold:foldRaw.map(function(v){return Math.max(band[0],Math.min(band[1],v));})};
+    if(bench===true){
+      // Same commanded STAND_TALL 50/130 and trim-once frame as the ordinary agent rest.
+      var tall=[Math.round(50+cal.L_OFF),Math.round(130+cal.R_OFF)];
+      if(tall.some(function(v){return v<band[0]||v>band[1];}))throw Error("outside_band");
+      out.tall=Object.freeze(tall);
+    }
     /* Caller/UI cannot mutate the active mapping after admission. */
     Object.freeze(src.IMU_SIGN);Object.freeze(cal.IMU_SIGN);Object.freeze(src);Object.freeze(cal);
     Object.freeze(band);Object.freeze(neutral);Object.freeze(foldRaw);Object.freeze(out.fold);
     return Object.freeze(out);
   }
   function unchanged(selection,body,source,mode){
-    try{return JSON.stringify(selection)===JSON.stringify(select(body,source,mode));}catch(e){return false;}
+    try{return JSON.stringify(selection)===JSON.stringify(select(body,source,mode,!!selection.tall));}catch(e){return false;}
   }
   function _recSmooth(t){ t=Math.max(0,Math.min(1,t)); return t*t*(3-2*t); }
   function _recJoints(cycle){ var p=REC_RECIPE, t=Math.abs(cycle), h=t<1?-p.amplitude:t<2?-p.amplitude*(1-_recSmooth(t-1)):0; return [h,-h]; }
@@ -70,23 +76,33 @@
   /* Preview uses a measured gravity sign, in stock phone coordinates. It has no learned-up
      history from the agent origin. Unlike the agent, unknown sensors always refuse a start. */
   function posture(samples,now,since){
-    var from=Math.max(now-1000,finite(since)?since:-Infinity),last=-Infinity,first=null,n=0,kind="",mixed=false,moving=false,sgn=0,invalid=false,reason="",magnitude=null;
-    if(!Array.isArray(samples)||!finite(now))return {kind:"unknown",upright:-1,n:0};
+    var from=Math.max(now-1000,finite(since)?since:-Infinity),last=-Infinity,first=null,n=0,kind="",mixed=false,moving=false,sgn=0,invalid=false,hard=false,bad=0,reason="",magnitude=null;
+    if(!Array.isArray(samples)||!finite(now))return {kind:"unknown",upright:-1,n:0,bad:0,soft:false};
     samples.forEach(function(s){
       if(!s||!finite(s.t)||s.t<from||s.t>now)return;
-      if(s.t<=last){invalid=true;reason=reason||"non_monotonic_time";return;}last=s.t;if(first===null)first=s.t;n++;
-      if(![s.x,s.y,s.z,s.a,s.b,s.g,s.linear].every(finite)||!sign(s.sign)){invalid=true;reason=reason||"invalid_sample";return;}
-      if(sgn&&sgn!==s.sign){invalid=true;reason=reason||"sign_changed";}sgn=s.sign;
+      if(s.t<=last){invalid=hard=true;reason=reason||"non_monotonic_time";return;}last=s.t;if(first===null)first=s.t;n++;
+      if(![s.x,s.y,s.z,s.a,s.b,s.g,s.linear].every(finite)||!sign(s.sign)){invalid=hard=true;reason=reason||"invalid_sample";return;}
+      if(sgn&&sgn!==s.sign){invalid=hard=true;reason=reason||"sign_changed";}sgn=s.sign;
       var mag=Math.sqrt(s.x*s.x+s.y*s.y+s.z*s.z);
       if(mag<8.3||mag>11.3){invalid=true;reason=reason||"gravity_magnitude";magnitude=mag;}
-      if(s.linear>=2.5||Math.abs(s.a)+Math.abs(s.b)+Math.abs(s.g)>30)moving=true;
+      var active=s.linear>=2.5||Math.abs(s.a)+Math.abs(s.b)+Math.abs(s.g)>30;
+      if(active)moving=true;
       var k=s.y>=5.5?"up":s.z>=6?"screen_up":s.z<=-6?"screen_down":Math.abs(s.x)>=6?"side":"slant";
+      if(mag<8.3||mag>11.3||active||k!=="up")bad++;
       if(kind&&kind!==k)mixed=true;kind=k;
     });
     if(invalid||n<5||now-last>250||last-first<200){kind="unknown";reason=reason||(n<5?"sample_count":now-last>250?"sample_stale":"sample_span");}
     else if(moving)kind="moving";
     else if(mixed)kind="mixed";
-    return {kind:kind||"unknown",upright:kind==="up"?1:/^(screen_up|screen_down|side|slant)$/.test(kind)?0:-1,n:n,reason:reason||(moving?"moving":mixed?"mixed":""),age:finite(last)?now-last:null,span:first===null?0:last-first,magnitude:magnitude};
+    return {kind:kind||"unknown",upright:kind==="up"?1:/^(screen_up|screen_down|side|slant)$/.test(kind)?0:-1,n:n,reason:reason||(moving?"moving":mixed?"mixed":""),age:finite(last)?now-last:null,span:first===null?0:last-first,magnitude:magnitude,bad:bad,soft:!hard&&n>=5&&now-last<=250&&last-first>=200};
   }
-  root.GBGetupWire={VERSION:VERSION,BODY_ID:BODY_ID,TICK_MS:40,SECONDS:5,select:select,unchanged:unchanged,Engine:Engine,posture:posture};
+  // Bench-only additive tail. The first 2 s of push and the original pose core are unchanged.
+  // Engine time is already scaled by the runner: 2.5..3.1 s finishes before every sweepEnd.
+  function TallEngine(selection,now,initial){
+    if(!selection||!Array.isArray(selection.tall)||selection.tall.length!==2||!selection.tall.every(function(v){return number(v,selection.band[0],selection.band[1]);}))throw Error("invalid_engine_setup");
+    this.base=new Engine(selection,now,initial);this.start=now;this.selection=selection;
+  }
+  TallEngine.prototype.tick=function(now,hold){var out=this.base.tick(now,hold),s=this.selection,f=_recSmooth((now-this.start-2500)/600);
+    ["sent","desired","raw"].forEach(function(key){out[key]=out[key].map(function(v,i){return v+(s.tall[i]-s.neutral[i])*f;});});return out;};
+  root.GBGetupWire={VERSION:VERSION,BODY_ID:BODY_ID,TICK_MS:40,SECONDS:5,select:select,unchanged:unchanged,Engine:Engine,TallEngine:TallEngine,posture:posture};
 })(typeof window!=="undefined"?window:this);

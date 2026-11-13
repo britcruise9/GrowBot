@@ -27,6 +27,15 @@ button{font-size:14px;padding:10px 6px;background:#101826;color:#dfe8f3;border:1
 .adv summary{color:var(--mut);font-weight:600;font-size:11.5px;cursor:pointer}
 .imu{display:flex;justify-content:space-around;font-size:11px;color:var(--mut);text-align:center}
 .imu b{display:block;font-size:14px;color:var(--text);font-variant-numeric:tabular-nums}
+/* 10-14: SIMPLE (every load) shows only the two steps; EXPERT (&ui=expert from the shell, this visit only) adds the rest */
+#ui.simple .xp{display:none}
+/* 10-14 Step 2 · straighten: the build page's trim tool (build3.html step 07), same controls */
+.trimfig{margin:0;max-width:340px}.trimfig video{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:10px}
+.trimfig figcaption{font-size:10.5px;color:#5a6b85;margin-top:4px}
+.trimrow{display:flex;align-items:center;max-width:340px}.trimlab{flex:0 0 52px;font-size:13px;font-weight:600}
+.trimval{flex:1;text-align:center;font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+button.trimb{flex:0 0 56px;font-size:20px;padding:6px 0}
+#trimMsg{font-size:12px;color:var(--mut);min-height:1.1em;line-height:1.45}#trimMsg.bad{color:#ff7a90}#trimMsg.good{color:var(--teal)}
 #st{font-size:12px;color:var(--teal);text-align:center;min-height:1.1em}
 #trace{height:28vh;min-height:54px;background:#070b12;border:1px solid var(--line);border-radius:10px;padding:6px 8px;font:11px/1.45 ui-monospace,monospace;color:#9fb6cf;overflow:auto;white-space:pre-wrap}
 #trace .net{color:var(--blue)}#trace .err{color:#ff7a90}#trace .mv{color:var(--teal)}#trace .cal{color:var(--amber)}
@@ -41,46 +50,51 @@ small{color:#566;font-size:10px}
 
  <div class=sec>
    <h3>① Check the legs</h3>
-   <div class=hint><b>Run the 3 steps if something looks off.</b> (Advanced is only needed if a sweep goes backward.)</div>
+   <div class=hint><b>Run these 2 steps if something looks off.</b></div>
 
    <div class=step>Step 1 · which leg</div>
-   <div class=hint>The build guide wiring is the default: no swap needed. LEFT and RIGHT are the robot's sides, so LEFT is on your right when you face its screen. Tap each button and check which leg moves; ignore the movement direction.</div>
+   <div class=hint>LEFT and RIGHT are the robot's sides, so LEFT is on your right when you face its screen. Tap each button: only that leg should move, and it should swing down toward the screen, the way GrowBot stands up.</div>
    <div class=r><button id=mvL>move LEFT</button><button id=mvR>move RIGHT</button></div>
+   <div class=hint id=legfix>Other leg moved? Switch off and swap the two servo plugs (build guide step 04, part 4D). Correct leg, but it went up and away from the screen? Check that servo is fitted with its shaft pointing outward (step 04, part 4B). Both are wiring fixes, so there is nothing to set here. On an ESP32 build, swap the two pins in GPIO_PINS instead of the plugs (ESP32 guide step 05).</div>
+   <div id=oldsigns style=display:none>
+     <div class=hint>This phone still has leg directions saved by the old sweep test (<b id=oldsignsv></b>). GrowBot and Move now use the stock leg directions by default. Older walk pages, the Custom agent tab and stockdir=0 links can still use these saved directions. Reset them for those paths only if this robot follows the stock build. Trims stay as they are.</div>
+     <div class=r><button id=clearsigns>use the stock leg directions</button></div>
+   </div>
    <details class=adv id=wiringhelp>
-     <summary id=wiringlabel>Troubleshooting: left and right connections reversed</summary>
-     <div class=hint>Use this only if LEFT moves the right leg and RIGHT moves the left leg. Walking backward does not mean the connections are reversed. Existing saved settings are kept. Screen-forward walking currently requires standard wiring with swap off.</div>
+     <summary id=wiringlabel>Saved left/right swap: OFF</summary>
+     <div class=hint>A software swap, only for robots already set up with it. The fix is to swap the two servo plugs, then turn this OFF. While it is ON, the forward walk, gentle spin, face follow and get-up stay off.</div>
      <div class=r><button class=tog id=swapLR>Swap left/right connections: OFF</button></div>
    </details>
 
    <div class=step>Step 2 · straighten</div>
-   <div class=hint>Trim until both legs hang straight down.</div>
-   <div class=sl><span>L trim</span><input id=lo type=range min=-30 max=30 value=0 oninput="CAL()"><b id=lov>0</b></div>
-   <div class=sl><span>R trim</span><input id=ro type=range min=-30 max=30 value=0 oninput="CAL()"><b id=rov>0</b></div>
+   <div class=hint>Phone on the robot? Take it off first. Lay the robot face down, then tap <b>Hold legs up</b>. This puts both servos at 90°.</div>
+   <div class=r><button id=trimHold>Hold legs up</button></div>
+   <div class=hint>Look at it from the side. Tap &minus; or + until the <b>near leg hides the far one</b> and both point straight up.</div>
+   <figure class=trimfig><video src="/media/leg-lineup.mp4" poster="/media/leg-lineup-poster.jpg" width="854" height="480" autoplay loop muted playsinline preload="metadata" aria-label="Seen from the side: two legs, then one"></video>
+     <figcaption>Example of correct trim calibration</figcaption></figure>
+   <div class=trimrow><span class=trimlab>Left</span><button class=trimb id=trimLMinus aria-label="left leg minus one degree">&minus;</button><span class=trimval id=trimLVal>0°</span><button class=trimb id=trimLPlus aria-label="left leg plus one degree">+</button></div>
+   <div class=trimrow><span class=trimlab>Right</span><button class=trimb id=trimRMinus aria-label="right leg minus one degree">&minus;</button><span class=trimval id=trimRVal>0°</span><button class=trimb id=trimRPlus aria-label="right leg plus one degree">+</button></div>
+   <div class=r><button id=trimSave>Save trim calibration</button></div>
+   <div id=trimMsg aria-live=polite></div>
+   <div class=hint>A leg runs out of taps? Its horn is a whole tooth off. Turn it one tooth on the shaft (build guide step 06), then try again.</div>
 
-   <div class=step>Step 3 · direction</div>
-   <div class=hint>Tap a sweep — the leg should sweep <b>DOWN toward the screen</b> (that is forward). If it lifts UP or sweeps backward instead, open Advanced and flip that leg.</div>
-   <div class=r><button id=swL>sweep L fwd</button><button id=swR>sweep R fwd</button></div>
-
-   <details class=adv>
-     <summary>Advanced — flip a reversed leg or IMU axis</summary>
-     <div class=hint>Only if a sweep went backward, or the walk leans / splits. Tilt the phone; each axis should move the natural way.</div>
-     <div class=r><button class=tog id=sl_>L_SIGN -1</button><button class=tog id=sr_>R_SIGN +1</button></div>
+   <details class="adv xp" id=imuadv>
+     <summary>Phone axis signs (backward walk and turns only)</summary>
+     <div class=hint>Only the backward walk and walking turns read these. The forward walk, spins and get-up set their own. Tilt the phone: each number should move the natural way.</div>
      <div class=imu><div>roll<b id=ir>-</b></div><div>pitch<b id=ip>-</b></div><div>yaw<b id=iy>-</b></div></div>
      <div class=r><button class=tog id=si0>IMU roll +</button><button class=tog id=si1>IMU pitch +</button><button class=tog id=si2>IMU yaw +</button></div>
    </details>
-
-   <div class=r><button id=resetcal>RESET CALIBRATION — fixes a broken walk</button></div>
  </div>
 
- <div class=sec>
+ <div class="sec xp">
    <h3>Direct pose</h3>
-   <div class=sl><span>Left</span><input id=lL type=range min=5 max=175 value=90 oninput="DP()"><b id=lLv>90</b></div>
-   <div class=sl><span>Right</span><input id=lR type=range min=5 max=175 value=90 oninput="DP()"><b id=lRv>90</b></div>
+   <div class=sl><span>Left</span><input id=lL type=range min=5 max=175 value=90 oninput="DP(1)"><b id=lLv>90</b></div>
+   <div class=sl><span>Right</span><input id=lR type=range min=5 max=175 value=90 oninput="DP(1)"><b id=lRv>90</b></div>
    <div class=r><button id=center>CENTER</button><button class=tog id=hold90>HOLD 90</button></div>
    <div class=hint>Release limps after ~500ms. HOLD keeps both legs stiff at 90&deg; for gluing, tap again to let go.</div>
  </div>
 
- <div class=sec>
+ <div class="sec xp">
    <h3>Gestures</h3>
    <div class=r id=gestures></div>
    <div class=r><button class=chip data-routine=wiggle>wiggle</button></div>
@@ -93,8 +107,16 @@ small{color:#566;font-size:10px}
 
 <script type="module">
 import { RelayBody } from '/relay-transport.js';
+import { createTrimmer, readTrims, writeTrims, fmt, TrimStore } from '/leg-trim.mjs';   // 10-14: build3.html step 07's own trim engine (Step 2 below)
 const $=id=>document.getElementById(id);
 const qp=new URLSearchParams(location.search);
+// 10-14 skip (no robot): an explicit EMPTY ?id= means no robot, face.html's rule. The /tester shell's skip mounts
+// this tab that way so it can be looked at on a desktop: no relay, no saved code, no 'bench', nothing sent and
+// nothing saved. Every button that would move a leg or save a setting says so instead (noRobot below).
+const NOROBOT=qp.has('id')&&!qp.get('id').trim(), NOROBOT_SAY='No robot connected. Connect a robot to use this.';
+// 10-14 (Brit: "always default to simple mode for all tabs"): EXPERT only when the shell says so for this visit.
+const EXPERT=qp.get('ui')==='expert';
+if(!EXPERT) $('ui').classList.add('simple');
 const D2R=Math.PI/180, R2D=180/Math.PI;
 
 // body truth — bundled from creature-core/body.json (the 85mm 2-leg), optionally overridden by a served /v3/body.json
@@ -106,73 +128,145 @@ let BODY={
              sway:[{l:72,r:108,ms:700},{l:108,r:72,ms:700},{l:90,r:90,ms:400}] }
 };
 const cal=Object.assign({L_SIGN:-1,R_SIGN:1,L_OFF:0,R_OFF:0,IMU_SIGN:[1,-1,1],gain:1,turn:0,SWAP:0}, BODY.walk.cal);
-const DEFAULTS=JSON.parse(JSON.stringify(cal));   // known-good baseline (body defaults, pre-localStorage) for the reset button
 try{ Object.assign(cal, JSON.parse(localStorage.gb_walk_cal||'{}')); }catch(e){}   // shared per-device cal (Surface 1 + creature-core read it too)
+const SWAP_SHOWN=EXPERT||!!cal.SWAP;   // SIMPLE shows the software swap only to a phone that already has it ON, so nobody is stuck with it
 
 const tEl=$('trace');
 function trace(line,kind){ const d=document.createElement('div'); if(kind)d.className=kind; d.textContent='> '+line; tEl.appendChild(d); while(tEl.childElementCount>140)tEl.removeChild(tEl.firstChild); tEl.scrollTop=tEl.scrollHeight; }
-function saveCal(){ localStorage.gb_walk_cal=JSON.stringify(cal); }
+// 10-14: writes ONLY the keys a control here changed, merged into what is saved. It used to write this page's whole
+// copy on every tap, which re-saved the signs and could put back a gain the Move tab had changed since this page
+// loaded. Every other saved value is left exactly as it is; the keys and their meaning are unchanged.
+function saveCal(keys){ let s={}; try{ s=JSON.parse(localStorage.gb_walk_cal||'{}'); }catch(e){} if(!s||typeof s!=='object'||Array.isArray(s)) s={};
+  keys.forEach(k=>{ s[k]=cal[k]; }); localStorage.gb_walk_cal=JSON.stringify(s); }
+function noRobot(){ if(!NOROBOT) return false; if($('st').textContent!==NOROBOT_SAY) trace(NOROBOT_SAY,'net'); $('st').textContent=NOROBOT_SAY; return true; }
 
-// relay (shared module)
-let body=null;
-function makeBody(id){ if(body) body.close(); var settled=false;
-  body=new RelayBody(id,{ onStatus:a=>{ $('dot').className='dot'+(a?' on':''); $('st').textContent=a?('body "'+id+'" ONLINE'):('no body on "'+id+'" yet'); trace(a?'body online':'body offline','net'); if(a&&!settled&&body&&body.ready){ settled=true; body.act([{l:84,r:96,ms:200},{l:96,r:84,ms:200},{l:90,r:90,ms:200}],'replace'); trace('settle wiggle (wakes the servos)','mv'); } },
+// relay (shared module). `awake` is the chip's presence, which the trim engine needs before it holds (online below).
+let body=null, awake=0;
+function makeBody(id){ allQuiet(); if(body) body.close(); var settled=false; awake=0;   // let go of every hold on the OLD body first
+  const nextBody=new RelayBody(id,{ onStatus:a=>{ if(body!==nextBody)return; awake=a; $('dot').className='dot'+(a?' on':''); $('st').textContent=a?('body "'+id+'" ONLINE'):('no body on "'+id+'" yet'); trace(a?'body online':'body offline','net'); if(a&&!settled&&body&&body.ready){ settled=true; body.act([{l:84,r:96,ms:200},{l:96,r:84,ms:200},{l:90,r:90,ms:200}],'replace'); trace('settle wiggle (wakes the servos)','mv'); } },
                           onAck:m=>trace('ack rid='+m.rid+' ok='+m.ok+(m.queued_ms!=null?(' queued_ms='+m.queued_ms):''),'net') });
-  body.connect(); trace('attaching to "'+id+'"','net');
+  body=nextBody; trimmer.load(); body.connect(); trace('attaching to "'+id+'"','net');
 }
 
-// ── direct pose: each slider input streams a latest-wins pose frame; stop touching → dead-man limps (~500ms) ──
-window.DP=function(){ const l=+$('lL').value, r=+$('lR').value; $('lLv').textContent=l; $('lRv').textContent=r; if(body&&body.ready) body.pose(l,r); };
-$('center').onclick=()=>{ $('lL').value=90; $('lR').value=90; DP(); };
+/* ── direct pose (EXPERT): stop touching → dead-man limps (~500ms) ──
+   10-14 THROTTLED (direct pose lag). A slider fires an input event per pixel and each one went straight out as a pose
+   frame, with no coalescing anywhere, so on a weak link the frames queued and replayed in order and the leg trailed
+   the finger. Now: at most one frame per DP_MS (about 30 a second), the newest value wins, the last position always
+   lands (a trailing send), and nothing goes out while the socket still has bytes waiting (bufferedAmount > 0); the
+   newest goes on a later tick once it drains. relay-transport.js is untouched: this only decides WHEN to call pose. */
+const DP_MS=33;
+let dpWant=null, dpAt=-1e9, dpT=null;
+function dpBusy(){ const ws=body&&body.ws; return !!ws&&ws.bufferedAmount>0; }
+function dpCancel(){ if(dpT!==null){ clearTimeout(dpT); dpT=null; } dpWant=null; }   // a pose still waiting never lands after STOP or another move
+function dpPump(){ dpT=null; if(!dpWant) return;
+  if(!body||!body.ready){ dpWant=null; return; }
+  const wait=DP_MS-(performance.now()-dpAt);
+  if(wait>0||dpBusy()){ dpT=setTimeout(dpPump,wait>0?wait:DP_MS); return; }
+  const p=dpWant; dpWant=null; dpAt=performance.now(); body.pose(p.l,p.r); }
+window.DP=function(user){ const l=+$('lL').value, r=+$('lR').value; $('lLv').textContent=l; $('lRv').textContent=r;
+  if(body&&body.ready){ if(user&&trimmer.letGo()) trimSay(''); dpWant={l:l,r:r}; if(dpT===null) dpPump(); } else if(user) noRobot(); };
+$('center').onclick=()=>{ $('lL').value=90; $('lR').value=90; DP(1); };
 
 // ── HOLD 90: re-sends the center pose faster than the ~500ms dead-man so legs stay stiff for gluing ──
 let holdT=null;
 function stopHold(){ if(holdT){ clearInterval(holdT); holdT=null; } $('hold90').textContent='HOLD 90'; $('hold90').className='tog'; }
 $('hold90').onclick=()=>{
   if(holdT){ stopHold(); return; }
+  if(noRobot()) return;
+  if(trimmer.letGo()) trimSay('');
   $('lL').value=90; $('lR').value=90; DP();
   holdT=setInterval(()=>{ if(body&&body.ready) body.pose(90,90); },200);
   $('hold90').textContent='HOLD 90 ✓'; $('hold90').className='tog neg';
 };
 $('lL').addEventListener('input',stopHold); $('lR').addEventListener('input',stopHold);   // manual drag wins over HOLD
-document.addEventListener('visibilitychange',()=>{ if(document.hidden) stopHold(); });     // background tabs throttle timers below the dead-man -> legs would twitch; release cleanly instead
+// one lane at a time: every hold this tab can make (HOLD 90, the trim hold, a direct pose still on its way) lets go
+function allQuiet(){ stopHold(); dpCancel(); if(trimmer.letGo()) trimSay(''); }
+document.addEventListener('visibilitychange',()=>{ if(document.hidden) allQuiet(); });     // background tabs throttle timers below the dead-man -> legs would twitch; release cleanly instead
+window.addEventListener('pagehide',allQuiet);
 
-// ── discrete moves/gestures over the act lane (glide + self-limp); they release the hold (one lane at a time) ──
-function act(steps,label){ stopHold(); if(!body||!body.ready){ trace('no body connected','err'); return; } const rid=body.act(steps,'replace'); trace('act ['+label+'] rid='+rid,'mv'); let i=0; const tot=steps.reduce((a,s)=>a+(s.ms||300),0); const t0=performance.now(); const anim=()=>{ const e=performance.now()-t0; let acc=0,cur=steps[steps.length-1]; for(const s of steps){ if(e<acc+(s.ms||300)){ cur=s; break; } acc+=s.ms||300; } $('lLv').textContent=Math.round(cur.l); $('lRv').textContent=Math.round(cur.r); if(e<tot) requestAnimationFrame(anim); }; requestAnimationFrame(anim); }
+// ── discrete moves/gestures over the act lane (glide + self-limp); they release the holds (one lane at a time) ──
+function act(steps,label){ allQuiet(); if(noRobot()) return; if(!body||!body.ready){ trace('no body connected','err'); return; } const rid=body.act(steps,'replace'); trace('act ['+label+'] rid='+rid,'mv'); let i=0; const tot=steps.reduce((a,s)=>a+(s.ms||300),0); const t0=performance.now(); const anim=()=>{ const e=performance.now()-t0; let acc=0,cur=steps[steps.length-1]; for(const s of steps){ if(e<acc+(s.ms||300)){ cur=s; break; } acc+=s.ms||300; } $('lLv').textContent=Math.round(cur.l); $('lRv').textContent=Math.round(cur.r); if(e<tot) requestAnimationFrame(anim); }; requestAnimationFrame(anim); }
 
 // gesture chips from body.gestures
 const gz=$('gestures');
 Object.keys(BODY.gestures).forEach(name=>{ const b=document.createElement('button'); b.className='chip'; b.textContent=name; b.onclick=()=>act(BODY.gestures[name],name); gz.appendChild(b); });
-document.querySelectorAll('[data-routine]').forEach(b=>b.onclick=()=>{ if(body&&body.ready){ const rid=body.routine(b.dataset.routine); trace('routine '+b.dataset.routine+' rid='+rid,'mv'); } else trace('no body connected','err'); });
+// the routine chip lets go of every hold first too, like act(): a pose frame after it would cut the routine off on the chip
+document.querySelectorAll('[data-routine]').forEach(b=>b.onclick=()=>{ allQuiet(); if(noRobot()) return; if(body&&body.ready){ const rid=body.routine(b.dataset.routine); trace('routine '+b.dataset.routine+' rid='+rid,'mv'); } else trace('no body connected','err'); });
 
-// ── calibration (writes shared gb_walk_cal) ──
-$('mvL').onclick=()=>act([{l:125,r:90,ms:450},{l:90,r:90,ms:400}],'which-leg: LEFT');
-$('mvR').onclick=()=>act([{l:90,r:125,ms:450},{l:90,r:90,ms:400}],'which-leg: RIGHT');
-$('swL').onclick=()=>{ const fwd=90+cal.L_SIGN*30; act([{l:fwd,r:90,ms:500},{l:90,r:90,ms:400}],'sweep L (sign '+(cal.L_SIGN>0?'+':'-')+')'); };
-$('swR').onclick=()=>{ const fwd=90+cal.R_SIGN*30; act([{l:90,r:fwd,ms:500},{l:90,r:90,ms:400}],'sweep R (sign '+(cal.R_SIGN>0?'+':'-')+')'); };
-window.CAL=function(){ cal.L_OFF=+$('lo').value; cal.R_OFF=+$('ro').value; $('lov').textContent=cal.L_OFF; $('rov').textContent=cal.R_OFF; saveCal();
-  act([{l:90+cal.L_OFF,r:90+cal.R_OFF,ms:300}],'trim L'+cal.L_OFF+' R'+cal.R_OFF); };
+/* ── calibration (writes shared gb_walk_cal) ──
+   10-14 (Brit: "i want all manual movements to follow whatever convention the spins and walks are doing").
+   ONE leg convention for every move this tab makes, the creature's, never the saved L_SIGN/R_SIGN. The walks,
+   spins and get-up all fix their own signs (forward-walk.js calibration(): -1/-1 on mirrored joints; spin-wire.js
+   spinCal: -1/+1; getup-wire.js; normal-spin.js through forward-walk) and every one comes out on the wire as the
+   same thing: a leg swings DOWN toward the screen as l goes below 90 and as r goes above 90. So l+r=180 moves both
+   legs together and 50/130 stands tall (BUILD.md, "Which leg is which"); the gestures and holds are raw degrees in
+   that convention already. The sign test and its L_SIGN/R_SIGN toggles are gone: a leg that goes the wrong way is
+   a wiring fix (swap the plugs, or a servo fitted shaft-in), and the moves that matter overwrite the sign anyway.
+   No control here saves a sign. The old walker still reads the saved ones (see OLD SAVED SIGNS below). */
+const DOWN={l:-1,r:1};   // the wire direction of "down toward the screen" for each leg
+$('mvL').onclick=()=>act([{l:90+DOWN.l*35,r:90,ms:450},{l:90,r:90,ms:400}],'which-leg: LEFT, down toward the screen');
+$('mvR').onclick=()=>act([{l:90,r:90+DOWN.r*35,ms:450},{l:90,r:90,ms:400}],'which-leg: RIGHT, down toward the screen');
+
+/* ── Step 2 · straighten, 10-14 (Brit: "our new tester page would be simpler IF it saves it the same way the build page
+   does", then "sure" to using the build page's own tool). This is /leg-trim.mjs, the engine build3.html step 07 runs,
+   with its flow, controls and words: Hold legs up glides both servos to 90 + trim and holds them with a 50 ms pose
+   stream, − and + move one leg one degree (clamped to +-20), Save writes L_OFF / R_OFF through writeTrims, which keeps
+   every other gb_walk_cal key as it is. It lets go on Let go, Save, STOP, any other move, a hidden page or a minute
+   without a tap. The old trim sliders (+-30, saved on every drag, previewed over the act lane) are gone, so this is the
+   ONE trim path on the tab. A look (no robot): online() is false, so the engine refuses to hold or nudge on its own, and
+   the buttons say no robot is connected first, like every control here; Save saves nothing. ── */
+function trimSay(t,cls){ const m=$('trimMsg'); m.textContent=t; m.className=cls||''; if(t) trace(t,cls==='bad'?'err':'cal'); }
+const trimmer=createTrimmer({
+  body:()=>body,
+  online:()=>!NOROBOT&&!!(body&&body.ready&&awake),
+  offlineText:()=>NOROBOT?NOROBOT_SAY:'Your robot is not online yet. Is it on, on batteries?',
+  read:()=>body?readTrims(localStorage,body.id):readTrims(localStorage),
+  write:(L,R)=>writeTrims(localStorage,L,R,body?body.id:'',Date.now()),
+  canSave:()=>!!body&&$('id').value.trim().toLowerCase()===body.id,
+  say:trimSay,
+  paint:st=>{ $('trimLVal').textContent=fmt(st.L); $('trimRVal').textContent=fmt(st.R); $('trimHold').textContent=(st.holding||st.engaging)?'Let go':'Hold legs up'; }
+});
+function trimNoRobot(){ if(!noRobot()) return false; $('trimMsg').textContent=NOROBOT_SAY; $('trimMsg').className='bad'; return true; }
+$('trimHold').onclick=()=>{ const st=trimmer.state(); if(st.holding||st.engaging){ trimmer.letGo(); trimSay(''); return; }
+  if(trimNoRobot()) return; stopHold(); dpCancel(); trimmer.hold(); };
+[['trimLMinus','L',-1],['trimLPlus','L',1],['trimRMinus','R',-1],['trimRPlus','R',1]].forEach(b=>{
+  $(b[0]).onclick=()=>{ if(trimNoRobot()) return; stopHold(); dpCancel(); trimmer.nudge(b[1],b[2]); }; });
+$('trimSave').onclick=()=>{ if(trimNoRobot()) return; if(trimmer.save()) trimmer.letGo(); };
+
 function refreshTogs(){
-  $('sl_').textContent='L_SIGN '+(cal.L_SIGN>0?'+1':'-1'); $('sl_').className='tog'+(cal.L_SIGN<0?' neg':'');
-  $('sr_').textContent='R_SIGN '+(cal.R_SIGN>0?'+1':'-1'); $('sr_').className='tog'+(cal.R_SIGN<0?' neg':'');
   $('si0').textContent='IMU roll '+(cal.IMU_SIGN[0]>0?'+':'-'); $('si0').className='tog'+(cal.IMU_SIGN[0]<0?' neg':'');
   $('si1').textContent='IMU pitch '+(cal.IMU_SIGN[1]>0?'+':'-'); $('si1').className='tog'+(cal.IMU_SIGN[1]<0?' neg':'');
   $('si2').textContent='IMU yaw '+(cal.IMU_SIGN[2]>0?'+':'-'); $('si2').className='tog'+(cal.IMU_SIGN[2]<0?' neg':'');
   $('swapLR').textContent='Swap left/right connections: '+(cal.SWAP?'ON':'OFF');
-  $('wiringlabel').textContent=cal.SWAP?'Troubleshooting: saved left/right swap is ON':'Troubleshooting: left and right connections reversed';if(cal.SWAP)$('wiringhelp').open=true; $('swapLR').className='tog'+(cal.SWAP?' neg':'');
-  $('lo').value=cal.L_OFF; $('lov').textContent=cal.L_OFF; $('ro').value=cal.R_OFF; $('rov').textContent=cal.R_OFF;
+  $('wiringhelp').style.display=SWAP_SHOWN?'':'none';
+  $('wiringlabel').textContent='Saved left/right swap: '+(cal.SWAP?'ON':'OFF');if(cal.SWAP)$('wiringhelp').open=true; $('swapLR').className='tog'+(cal.SWAP?' neg':'');
+  paintOldSigns();
 }
-$('sl_').onclick=()=>{cal.L_SIGN*=-1;refreshTogs();saveCal();trace('L_SIGN='+cal.L_SIGN,'cal');};
-$('sr_').onclick=()=>{cal.R_SIGN*=-1;refreshTogs();saveCal();trace('R_SIGN='+cal.R_SIGN,'cal');};
-$('si0').onclick=()=>{cal.IMU_SIGN[0]*=-1;refreshTogs();saveCal();trace('IMU roll sign='+cal.IMU_SIGN[0],'cal');};
-$('si1').onclick=()=>{cal.IMU_SIGN[1]*=-1;refreshTogs();saveCal();trace('IMU pitch sign='+cal.IMU_SIGN[1],'cal');};
-$('si2').onclick=()=>{cal.IMU_SIGN[2]*=-1;refreshTogs();saveCal();trace('IMU yaw sign='+cal.IMU_SIGN[2],'cal');};
-$('swapLR').onclick=()=>{cal.SWAP=cal.SWAP?0:1;refreshTogs();saveCal();trace('SWAP='+cal.SWAP,'cal');$('st').textContent='L/R swap '+(cal.SWAP?'ON':'OFF')+'. Test each named leg again to confirm.';};
-$('resetcal').onclick=()=>{ Object.assign(cal, JSON.parse(JSON.stringify(DEFAULTS))); refreshTogs(); saveCal(); $('st').textContent='calibration reset to defaults'; trace('calibration reset: L_SIGN -1, R_SIGN +1, IMU 1,-1,1, trim 0','cal'); };
+/* IMU_SIGN stays, EXPERT only: it is still LIVE in the creature. The old walker (growbot_policy.js, growbot_runner.js
+   z-up path) reads it for the backward walk and walking turns (next.html runGait, the official gait). The forward
+   walk, normal spin, spin v4 (spin-wire.js) and get-up set their own axes. */
+function flipImu(i,name){ if(noRobot()) return; cal.IMU_SIGN=cal.IMU_SIGN.slice(); cal.IMU_SIGN[i]*=-1; refreshTogs(); saveCal(['IMU_SIGN']); trace('IMU '+name+' sign='+cal.IMU_SIGN[i],'cal'); }
+$('si0').onclick=()=>flipImu(0,'roll');
+$('si1').onclick=()=>flipImu(1,'pitch');
+$('si2').onclick=()=>flipImu(2,'yaw');
+$('swapLR').onclick=()=>{ if(noRobot()) return; cal.SWAP=cal.SWAP?0:1;refreshTogs();saveCal(['SWAP']);trace('SWAP='+cal.SWAP,'cal');$('st').textContent='L/R swap '+(cal.SWAP?'ON':'OFF')+'. Test each named leg again to confirm.';};
 
-$('stop').onclick=()=>{ stopHold(); if(body) body.stop(); $('st').textContent='STOP, legs limp'; trace('STOP','mv'); };
+/* ── OLD SAVED SIGNS, 10-14. The sign test is gone and nothing in /tester saves a sign, but a phone that flipped a
+   leg in it still carries L_SIGN/R_SIGN (Brit's: +1/+1). Default V3 and Move now take the body/stock signs.
+   The opt-out, older walk pages and Custom agent can still use saved signs, so retain the explicit reset.
+   It deletes only those keys, with no motion and no changes to trims, gain, IMU_SIGN or SWAP. ── */
+const STOCK_SIGNS={L_SIGN:-1,R_SIGN:1};
+function savedRaw(){ let s={}; try{ s=JSON.parse(localStorage.gb_walk_cal||'{}'); }catch(e){ return null; } return (s&&typeof s==='object'&&!Array.isArray(s))?s:null; }
+function oldSigns(s){ return !!s&&Object.keys(STOCK_SIGNS).some(k=>k in s&&s[k]!==STOCK_SIGNS[k]); }
+function paintOldSigns(){ const s=savedRaw(), on=oldSigns(s), f=v=>v===undefined?'stock':(v>0?'+':'')+v;
+  $('oldsigns').style.display=on?'':'none'; $('oldsignsv').textContent=on?'L '+f(s.L_SIGN)+', R '+f(s.R_SIGN):''; }
+$('clearsigns').onclick=()=>{ if(noRobot()) return; const s=savedRaw(); if(!oldSigns(s)){ paintOldSigns(); return; }
+  delete s.L_SIGN; delete s.R_SIGN; localStorage.gb_walk_cal=JSON.stringify(s); paintOldSigns();
+  $('st').textContent='Stock leg directions back. Trims kept.'; trace('old saved L_SIGN/R_SIGN removed: the stock -1/+1 apply','cal'); };
 
-// IMU readout (orientation) — for step 4
+$('stop').onclick=()=>{ allQuiet(); if(noRobot()) return; if(body) body.stop(); $('st').textContent='STOP, legs limp'; trace('STOP','mv'); };
+
+// IMU readout (orientation), for the phone axis signs above
 let base=null;
 function onOri(e){ if(e.alpha==null) return; if(!base) base={a:e.alpha,b:e.beta,g:e.gamma};
   const wrap=x=>((x+180)%360+360)%360-180;
@@ -181,9 +275,10 @@ function onOri(e){ if(e.alpha==null) return; if(!base) base={a:e.alpha,b:e.beta,
   $('iy').textContent=(cal.IMU_SIGN[2]*wrap(e.alpha-base.a)).toFixed(0);
 }
 
-function connect(){ const id=($('id').value.trim()||'bench'); localStorage.gb_walk_id=id; makeBody(id); }
+function connect(){ if(noRobot()) return; const id=($('id').value.trim().toLowerCase()||'bench'); const trimBoot=TrimStore.boot(localStorage,id,localStorage.gb_walk_id,null,null);if(trimBoot.boot&&trimBoot.boot.err){trimSay('Couldn’t load this robot’s trim in this browser. Reload and try again.','bad');return;} localStorage.gb_walk_id=id; makeBody(id); }
 $('id').addEventListener('change',connect);
-$('id').value = qp.get('id') || localStorage.gb_walk_id || 'bench';
+if(NOROBOT){ $('id').disabled=true; $('id').placeholder='no robot connected'; }
+else $('id').value = qp.get('id') || localStorage.gb_walk_id || 'bench';
 
 async function wake(){
   try{ if(window.DeviceOrientationEvent&&DeviceOrientationEvent.requestPermission) await DeviceOrientationEvent.requestPermission(); }catch(e){}
@@ -191,7 +286,7 @@ async function wake(){
   window.addEventListener('deviceorientation',onOri,{passive:true});
   $('start').style.display='none'; $('ui').style.display='block';   /* block, NOT flex — .wrap is display:block since the 0726 iOS12 fix (gap-less owl margins); an inline flex here re-created a ROW (flex-direction:column is gone) and threw every section off-screen right on ALL devices post-wake (Brit's Android field report 0726-eve) */
   refreshTogs(); DP(); connect();
-  trace('woke — connect a body, then pose / gesture / calibrate','net');
+  trace('woke: connect a body, then check the legs','net');
 }
 $('start').addEventListener('click',wake);
 </script></body></html>

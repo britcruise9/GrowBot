@@ -1,6 +1,6 @@
 /* R3 normal spin, 1005. Frozen Motion Lab inference, each policy's own seed.
    Bench evidence: one stock kit, multiple surfaces. No angle or all-kit guarantee.
-   An opt-in bench stall observer may request stock escape; default inference is unchanged. */
+   A stall observer may request stock escape once (default on since 1014, ?spinstall=0 opts out); inference is unchanged. */
 (function(root){
   var models={
     cw:{id:"growbot-adaptive-spin-r3-1004-sweep-controlled-cw-0",sha:"ca510c4eeba5cee6fc6213a0537931e5e087901e9fc06a37c791321cf64fa337",path:"/policies/normal-spin-1005/cw.json"},
@@ -77,7 +77,7 @@
     var g=this.guard(s,now,c);if(g.prep||g.abort)return g;
     var out=this.policy.tickBody(g.frame.gyro,g.frame.acc);out.tilt=g.tilt;out.prep=false;this.n++;this.lastTick=now;return out;
   };
-  /* Bench-only net turn observer: project angular velocity onto gravity so pitch/roll rocking
+  /* Net turn observer (bench-only until 1014): project angular velocity onto gravity so pitch/roll rocking
      is not mistaken for room yaw. Evaluate real sensor timestamps, never repeated controller
      ticks. Run averages in the 1008 journal are not validation of this 1.5 s threshold. */
   function StallWatch(){this.rows=[];this.triggered=false;}
@@ -88,7 +88,7 @@
     if(!valid||elapsed<1000||now<s.t||now-s.t>100||s.linear>=11){this.reset();return null;}
     var m=Math.sqrt(s.x*s.x+s.y*s.y+s.z*s.z);
     /* Only a supported stock upright frame may request bigger steps, never a side/back fall.
-       This is not a held detector and is not promoted to unattended use by the bench flag. */
+       This is not a held detector. Default on since 1014 after a supervised bench, not a multi-kit validation. */
     if(m<.01||s.y<=0||s.z<0){this.reset();return null;}
     var rate=(s.b*s.y+s.a*s.x+s.g*s.z)/m,last=this.rows[this.rows.length-1];
     if(last&&s.t===last.t)return null;

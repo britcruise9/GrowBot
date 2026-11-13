@@ -1,6 +1,6 @@
 # Chip software (Pico 2 W)
 
-What runs on the robot's chip. These are the files [growbot.dev/build](https://growbot.dev/build) installs, copied on 2026-10-13.
+What runs on the robot's chip. These are the files [growbot.dev/build](https://growbot.dev/build) installs, copied on 2026-11-12.
 
 | file | what it does |
 |---|---|

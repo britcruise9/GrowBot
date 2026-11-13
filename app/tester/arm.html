@@ -1,0 +1,324 @@
+<!DOCTYPE html><html><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Arm controls · GrowBot tester</title><style>
+/* 1026 ARM PAGE. A manual remote for a servo arm on a stock Pico robot that carries arm_body.py (body-docs.html,
+   "Add an arm"). Linked from /tester and body-docs only, never from the app: the brain cannot move an arm yet.
+   Same tokens as motor.html. No flex gap anywhere (iOS 12 has none): rows use owl margins, the pose grid uses grid-gap. */
+:root{color-scheme:dark;--bg:#05070d;--panel:#0e1622;--line:rgba(120,160,200,.25);--text:#e8f6ff;--mut:#7f93ab;--teal:#37e0c8;--blue:#5ab0ff;--red:#8c1d2f;--amber:#e0a93b}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif}
+body{-webkit-text-size-adjust:100%}
+.wrap{max-width:520px;margin:0 auto;padding:12px 16px 120px}
+.wrap>*+*{margin-top:10px}
+.top{display:flex;align-items:center}.top>*+*{margin-left:8px}
+.ttl{font-size:15px;font-weight:800;color:var(--teal);letter-spacing:.02em}
+.tag{font-size:9px;font-weight:800;letter-spacing:.1em;color:#0e1622;background:var(--mut);border-radius:999px;padding:2px 7px}
+.dot{width:11px;height:11px;border-radius:50%;background:#445;flex:0 0 auto}
+.dot.on{background:var(--teal);box-shadow:0 0 8px var(--teal)}
+.row{display:flex;align-items:center}.row>*+*{margin-left:8px}
+#code{flex:1;min-width:0;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px;font-size:16px}
+button{font:inherit;font-size:14px;padding:11px 8px;background:#101826;color:#dfe8f3;border:1px solid #2a3a4d;border-radius:8px;font-weight:600;touch-action:manipulation}
+button:active{transform:translateY(1px)}
+button[disabled]{opacity:.45}
+#st{font-size:13px;color:var(--teal);line-height:1.45;min-height:1.4em}
+#st.bad{color:#ff7a90}
+.hint{font-size:12px;color:var(--mut);line-height:1.5}
+.hint a,.foot a{color:var(--blue)}
+.sec{border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.sec>*+*{margin-top:9px}
+.sec h3{margin:0;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);font-weight:700}
+.sl{display:flex;align-items:center;min-height:40px}.sl>*+*{margin-left:8px}
+.sl span{flex:0 0 66px;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sl input[type=range]{flex:1;min-width:0;height:32px;margin:0}
+.sl .val{flex:0 0 52px;text-align:right;line-height:1.15}
+.sl b{display:block;font-size:15px;font-variant-numeric:tabular-nums}
+.sl small{display:block;font-size:10px;color:var(--amber);white-space:nowrap}
+.grid{display:grid;grid-template-columns:1fr 1fr 1fr;grid-gap:8px;gap:8px}
+.grid button{padding:13px 4px;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#letgo{width:100%}
+details.sec summary{font-size:12.5px;color:var(--mut);font-weight:600;cursor:pointer}
+.lim{display:flex;align-items:center;font-size:12px;color:var(--mut)}.lim>*+*{margin-left:6px}
+.lim span{flex:1;min-width:0;color:var(--text);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lim input{width:62px;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 6px;font-size:15px}
+#trace{max-height:22vh;min-height:48px;overflow:auto;background:#070b12;border:1px solid var(--line);border-radius:10px;padding:6px 8px;font:11px/1.45 ui-monospace,Menlo,monospace;color:#9fb6cf;white-space:pre-wrap;word-break:break-word}
+#trace .net{color:var(--blue)}#trace .err{color:#ff7a90}#trace .mv{color:var(--teal)}
+.foot{font-size:11.5px;color:var(--mut);line-height:1.5}
+.stopbar{position:fixed;left:0;right:0;bottom:0;padding:10px 16px;padding-bottom:calc(10px + env(safe-area-inset-bottom));background:rgba(5,7,13,.94);border-top:1px solid var(--line)}
+#stop{display:block;width:100%;max-width:488px;margin:0 auto;padding:17px 8px;font-size:20px;font-weight:800;letter-spacing:.08em;color:#fff;background:var(--red);border-color:#c23a52;border-radius:12px}
+</style></head><body>
+<div class=wrap>
+ <div class=top><span class=dot id=dot></span><span class=ttl>Arm controls</span><span class=tag>EXPERIMENTAL</span></div>
+ <div class=row><input id=code placeholder="pairing code, like gb-a3f9c1" autocomplete=off autocapitalize=off spellcheck=false aria-label="pairing code"><button id=go>connect</button></div>
+ <div id=st aria-live=polite>enter your robot's pairing code</div>
+ <div class=hint>For a robot with a servo arm and arm_body.py on its Pico (<a href="/body-docs.html#add-an-arm">add an arm</a>). GrowBot does not move the arm with today's arm_body.py, so this page is the only way (a new arm file that keeps parts holding is being tested). Close GrowBot while you use it: GrowBot sends a stop when it starts most leg moves and when you stop it, and a stop lets the arm go.</div>
+
+ <div class=sec>
+   <h3>joints</h3>
+   <div id=joints></div>
+   <div class=hint id=holdhint>Each joint holds still after a move, then lets go after 2 minutes with no new move, or 15 s after this page closes, sleeps or loses its connection.</div>
+ </div>
+
+ <div class=sec>
+   <h3>poses</h3>
+   <div class=grid id=poses></div>
+   <button id=letgo>let the arm go (arm only)</button>
+   <div class=hint>STOP stops everything: the arm and the wheels or legs. Leaving this page lets the arm go too.</div>
+ </div>
+
+ <details class=sec id=lim>
+   <summary>slider limits (this browser)</summary>
+   <div class=hint id=limnote>The robot clamps every move to the limits in its arm_config.py anyway. Narrow the sliders here while you find each joint's safe range.</div>
+   <div id=limrows></div>
+   <button id=limrobot>use the robot's limits</button>
+ </details>
+
+ <div id=trace></div>
+ <div class=foot>Not tested on a real arm yet. Tell us how yours goes in <a href="https://discord.gg/wCnAVaH4zR">Discord</a>. Setup: <a href="/body-docs.html#add-an-arm">body docs, add an arm</a>.</div>
+</div>
+<div class=stopbar><button id=stop>STOP</button></div>
+
+<script type="module">
+import { RelayBody } from '/relay-transport.js';
+/* 1026 ARM PAGE. The wire is arm_body.py's (vercel-app/firmware/arm/), carried by the shared RelayBody socket:
+     {t:'arm', a:'d1,d2,d3,d4'}   absolute degrees per joint, blank = leave that joint. No rid while a slider drags
+                                  (a latest-wins stream, no reply); the release sends one WITH a rid for the ack.
+     {t:'arm', pose:name, rid}    a named pose          {t:'arm', stop:1, rid}   the arm alone goes limp
+     {t:'arm', q:1, rid}          what is this arm: n, names, min, max, rest, poses, idle_s, lease_s, hold_s
+                                  (sent once online)
+     {t:'arm', q:1}               no rid: the keepalive, every 5 s while this page is open and in sight. The relay
+                                  never tells the chip that a phone left, so the arm lets go after its lease
+                                  (LEASE_S, 15 s) without one: a phone that sleeps or loses signal lets go of it.
+     {t:'stop', rid}              the whole robot: the wheels or legs go limp (and the served travel-1026
+                                  arm_body.py lets the arm go too). Sent here with this page's own rid, not
+                                  RelayBody.stop(), whose numbered rid the app could take. STOP sends
+                                  {t:'arm',stop:1,rid} first: the new 1104 arm_body.py (firmware-next, being tested)
+                                  FREEZES the arm on a whole-robot stop, so only the arm's own stop lets it go
+   This page never sends pose, act or routine, so it never drives the wheels or legs. The arm envelope lives
+   here, not in relay-transport.js, while the arm is a tester-only lane; brain control would move it there.
+   Every rid is a string that starts with this page's own prefix, STOP's too: the relay sends every chip reply to
+   every phone on the code, and the app keys its gesture acks by number, so neither side can take the other's ack.
+   A robot without arm_body.py (or on firmware older than 10-26) ignores arm frames and never answers, so silence
+   after the question means no arm. The pairing code is read from ?id= or the code /tester remembers
+   (gb_walk_id), and never written there: that key belongs to the trim store (trim-store.js). */
+const $=id=>document.getElementById(id);
+const qp=new URLSearchParams(location.search);
+const LIM_KEY='gb_arm_limits';     // {"min":[...],"max":[...]} per joint, this browser only
+const DEF={names:['base','shoulder','elbow','grip'],lo:45,hi:135,n:4};   // arm_config.py's template, UNMEASURED
+const DEF_POSES=['rest','up','point','wave','grab-open','grab-close'];
+const SEND_MS=40;                  // slider stream: at most one frame per 40 ms, newest wins
+const ASK_MS=3000;                 // no answer to the question in this long = no arm
+const KEEP_MS=5000;                // the keepalive, while open and in sight (a third of the robot's lease at most)
+const RID='arm'+Math.random().toString(36).slice(2,6)+'-';
+let ridN=0;
+function nextRid(){ ridN++; return RID+ridN; }
+
+let body=null, code='', online=false;
+let robot=null;        // the arm's answer to q, cleaned (null = no answer yet)
+let seen=null;         // where the robot says each joint is aimed, from its last answer
+let J=null;            // the sliders: {n, names, min, max}
+let pending=[], sendT=null, sentAt=-1e9, dragging=-1;
+let askT=null, refreshT=null, stopRid=null, keepT=null;
+const waiting={};      // rid -> what it asked: 'ask', 'move', 'pose', 'letgo'
+
+const tEl=$('trace');
+function trace(line,kind){ const d=document.createElement('div'); if(kind) d.className=kind; d.textContent='> '+line; tEl.appendChild(d);
+  while(tEl.childNodes.length>80) tEl.removeChild(tEl.firstChild); tEl.scrollTop=tEl.scrollHeight; }
+function say(text,bad){ const s=$('st'); s.textContent=text; s.className=bad?'bad':''; }
+function dot(on){ $('dot').className='dot'+(on?' on':''); }
+function ready(){ return !!body&&body.ready; }
+function busy(){ const ws=body&&body.ws; return !!ws&&ws.bufferedAmount>0; }
+function clamp(v,lo,hi){ return v<lo?lo:v>hi?hi:v; }
+function secs(ms){ ms=+ms||0; return ms<1000?'under a second':(Math.round(ms/100)/10)+' s'; }
+function send(m){ if(!ready()) return false; body.ws.send(JSON.stringify(m)); return true; }
+
+// ── slider limits: a saved local setting wins, then the robot's own limits, then the template's 45 to 135 ──
+function okLim(a,b){ return typeof a==='number'&&typeof b==='number'&&isFinite(a)&&isFinite(b)&&a>=0&&b<=180&&a<b; }
+function readLimits(){ try{ const s=JSON.parse(localStorage.getItem(LIM_KEY)||'null'); if(s&&Array.isArray(s.min)&&Array.isArray(s.max)) return s; }catch(e){} return null; }
+function writeLimits(v){ try{ if(v) localStorage.setItem(LIM_KEY,JSON.stringify(v)); else localStorage.removeItem(LIM_KEY); return true; }catch(e){ return false; } }
+function model(){
+  const n=robot?robot.n:DEF.n, saved=readLimits(), names=[], min=[], max=[];
+  for(let i=0;i<n;i++){
+    names.push((robot&&robot.names[i])||DEF.names[i]||('joint '+(i+1)));
+    let lo=robot?robot.min[i]:DEF.lo, hi=robot?robot.max[i]:DEF.hi;
+    if(saved&&okLim(saved.min[i],saved.max[i])){ lo=Math.round(saved.min[i]); hi=Math.round(saved.max[i]); }
+    min.push(lo); max.push(hi);
+  }
+  return {n:n,names:names,min:min,max:max};
+}
+function startVal(i){ const v=seen&&seen[i]!=null?seen[i]:(robot&&robot.rest?robot.rest[i]:90); return Math.round(clamp(v,J.min[i],J.max[i])); }
+
+function buildJoints(){
+  J=model(); pending=[]; const box=$('joints'); box.textContent='';
+  for(let i=0;i<J.n;i++){
+    const row=document.createElement('div'); row.className='sl';
+    const lab=document.createElement('span'); lab.textContent=J.names[i];
+    const r=document.createElement('input'); r.type='range'; r.id='j'+i; r.min=String(J.min[i]); r.max=String(J.max[i]); r.step='1';
+    r.value=String(startVal(i)); r.setAttribute('aria-label',J.names[i]);
+    const val=document.createElement('div'); val.className='val';
+    const v=document.createElement('b'); v.id='jv'+i; v.textContent=r.value+'°';
+    const aim=document.createElement('small'); aim.id='ja'+i;   // what the robot says it aims at, when that differs
+    val.appendChild(v); val.appendChild(aim);
+    r.addEventListener('input',()=>slide(i,false));
+    r.addEventListener('change',()=>slide(i,true));
+    row.appendChild(lab); row.appendChild(r); row.appendChild(val); box.appendChild(row);
+  }
+  buildLimits(); paintAim();
+}
+function buildLimits(){
+  const box=$('limrows'); box.textContent='';
+  for(let i=0;i<J.n;i++){
+    const row=document.createElement('div'); row.className='lim';
+    const lab=document.createElement('span'); lab.textContent=J.names[i]; row.appendChild(lab);
+    [['min',J.min[i]],['max',J.max[i]]].forEach(p=>{
+      const t=document.createElement('small'); t.textContent=p[0]; row.appendChild(t);
+      const inp=document.createElement('input'); inp.type='number'; inp.id='l'+p[0]+i; inp.min='0'; inp.max='180'; inp.step='1'; inp.value=String(p[1]);
+      inp.setAttribute('aria-label',J.names[i]+' '+p[0]); inp.addEventListener('change',saveLimits); row.appendChild(inp);
+    });
+    box.appendChild(row);
+  }
+  $('limrobot').disabled=!readLimits();
+  $('limnote').textContent=robot
+    ? "The robot's own limits are "+robot.min.map((lo,i)=>lo+' to '+robot.max[i]).join(', ')+'. It clamps every move to them, whatever the sliders say.'
+    : "No answer from an arm yet, so the sliders use arm_config.py's starting range, 45 to 135. The robot clamps every move to its own limits anyway.";
+}
+function saveLimits(){
+  const min=[], max=[];
+  for(let i=0;i<J.n;i++){
+    const a=Math.round(+$('lmin'+i).value), b=Math.round(+$('lmax'+i).value);
+    if(!okLim(a,b)){ $('lmin'+i).value=String(J.min[i]); $('lmax'+i).value=String(J.max[i]);   // that row snaps back, so the next edit can save
+      say(J.names[i]+': min must be below max, both 0 to 180',true); return; }
+    min.push(a); max.push(b);
+  }
+  if(!writeLimits({min:min,max:max})){ say('this browser could not save the limits',true); return; }
+  buildJoints(); say('slider limits saved in this browser');
+}
+$('limrobot').addEventListener('click',()=>{ writeLimits(null); buildJoints(); say(robot?"the sliders use the robot's limits":"the sliders use the starting range, 45 to 135"); });
+
+// what the robot says it is aiming at, beside any slider it disagrees with (a clamp, or a pose that moved it)
+function paintAim(){ for(let i=0;i<J.n;i++){ const el=$('ja'+i); if(!el) continue; const a=seen&&seen[i];
+  el.textContent=(a!=null&&Math.abs(a-(+$('j'+i).value))>=1)?'robot '+a+'°':''; } }
+
+// ── sliders: stream while dragging (no rid, newest wins), then one frame with a rid on release ──
+function fields(){ let any=false; const out=[]; for(let i=0;i<J.n;i++){ const v=pending[i]; if(v==null) out.push(''); else { out.push(String(v)); any=true; } } return any?out.join(','):null; }
+function cancelSends(){ if(sendT!==null){ clearTimeout(sendT); sendT=null; } pending=[]; }
+function flush(final){
+  if(sendT!==null){ clearTimeout(sendT); sendT=null; }
+  const a=fields(); pending=[]; if(!a) return;
+  const m={t:'arm',a:a}; if(final){ m.rid=nextRid(); waiting[m.rid]='move'; }
+  if(send(m)){ sentAt=Date.now(); if(final) trace('move '+a+' rid='+m.rid,'mv'); }
+}
+function pump(){ sendT=null; if(!fields()) return; if(!ready()){ pending=[]; return; }
+  const wait=SEND_MS-(Date.now()-sentAt);
+  if(wait>0||busy()){ sendT=setTimeout(pump,wait>0?wait:SEND_MS); return; }
+  flush(false); }
+function slide(i,done){
+  const r=$('j'+i), v=Math.round(clamp(+r.value,J.min[i],J.max[i]));
+  $('jv'+i).textContent=v+'°'; dragging=done?-1:i; paintAim();
+  if(!ready()){ if(done) say(code?'not connected yet: nothing sent':"enter your robot's pairing code first",true); return; }
+  pending[i]=v;
+  if(done) flush(true); else if(sendT===null) pump();
+}
+
+// ── poses, let go, STOP ──
+function buildPoses(){ const box=$('poses'); box.textContent='';
+  (robot?robot.poses:DEF_POSES).forEach(name=>{ const b=document.createElement('button'); b.textContent=name; b.addEventListener('click',()=>pose(name)); box.appendChild(b); }); }
+function pose(name){
+  cancelSends(); clearTimeout(refreshT);
+  if(!ready()){ say(code?'not connected yet: nothing sent':"enter your robot's pairing code first",true); return; }
+  const rid=nextRid(); waiting[rid]='pose'; send({t:'arm',pose:name,rid:rid}); say(name+'…'); trace('pose '+name+' rid='+rid,'mv');
+}
+$('letgo').addEventListener('click',()=>{
+  cancelSends(); clearTimeout(refreshT);
+  if(!ready()){ say(code?'not connected yet: nothing sent':"enter your robot's pairing code first",true); return; }
+  const rid=nextRid(); waiting[rid]='letgo'; send({t:'arm',stop:1,rid:rid}); trace('let the arm go rid='+rid,'mv');
+});
+$('stop').addEventListener('click',()=>{
+  cancelSends(); clearTimeout(refreshT);
+  if(!ready()){ say('not connected: nothing to stop',true); return; }
+  const arid=nextRid(); send({t:'arm',stop:1,rid:arid});   // the arm lets go first: a robot STOP alone only freezes it (1104)
+  const rid=nextRid(); stopRid=rid; send({t:'stop',rid:rid}); say('STOP sent'); trace('STOP (arm rid='+arid+', and wheels or legs) rid='+rid,'mv');
+});
+window.addEventListener('pagehide',()=>{ cancelSends(); if(ready()) send({t:'arm',stop:1}); });   // leaving lets the arm go
+
+// ── the keepalive: without one for the robot's lease, the arm lets go (a closed, asleep or offline phone) ──
+function keepEvery(){ const l=robot&&robot.lease; return l>0?clamp(Math.round(l*1000/3),1000,KEEP_MS):KEEP_MS; }
+function keepOff(){ clearTimeout(keepT); keepT=null; }
+function keepOn(){ keepOff(); keepT=setTimeout(beat,keepEvery()); }
+function beat(){ keepT=null; if(!online) return; if(document.visibilityState!=='hidden') send({t:'arm',q:1}); keepOn(); }
+
+// ── the robot's replies ──
+function row(s,n){ if(typeof s!=='string') return null; const p=s.split(','); if(p.length!==n) return null; const out=[];
+  for(let i=0;i<n;i++){ const v=Number(p[i]); if(p[i]===''||!isFinite(v)) return null; out.push(v); } return out; }
+function took(m){
+  const n=m.n; if(typeof n!=='number'||Math.floor(n)!==n||n<1||n>8) return false;
+  const min=row(m.min,n), max=row(m.max,n); if(!min||!max) return false;
+  const names=typeof m.names==='string'?m.names.split(','):[];
+  const said=Array.isArray(m.poses)?m.poses.filter(p=>typeof p==='string'&&/^[A-Za-z0-9 _-]{1,16}$/.test(p)).slice(0,24):DEF_POSES;
+  const poses=DEF_POSES.filter(p=>said.indexOf(p)>=0).concat(said.filter(p=>DEF_POSES.indexOf(p)<0));   // the usual six keep their places (the chip sorts its list)
+  const was=robot?JSON.stringify([robot.n,robot.names,robot.min,robot.max]):'';
+  robot={n:n,names:names,min:min,max:max,rest:row(m.rest,n),poses:poses,idle:Math.round(+m.idle_s||0),
+    lease:Math.round(+m.lease_s||0),hold:row(m.hold_s,n)};
+  clearTimeout(askT); askT=null;
+  seen=row(m.arm,n)||seen;
+  if(was!==JSON.stringify([n,names,min,max])) buildJoints();
+  else for(let i=0;i<n;i++) if(i!==dragging&&seen&&seen[i]!=null){ const v=Math.round(clamp(seen[i],J.min[i],J.max[i])); $('j'+i).value=String(v); $('jv'+i).textContent=v+'°'; }
+  paintAim(); buildPoses(); $('holdhint').textContent=holdText();
+  if(online) keepOn();               // the question just renewed the lease; the next beat keeps the robot's pace
+  return true;
+}
+function holdText(){
+  const idle=robot&&robot.idle>0?robot.idle:120, lease=robot&&robot.lease>0?robot.lease:15, own=[];
+  if(robot&&robot.hold) robot.hold.forEach((h,i)=>{ if(h>0) own.push((robot.names[i]||'joint '+(i+1))+' after '+h+' s'); });
+  return 'Each joint holds still after a move, then lets go after '+(idle%60===0?(idle/60)+' minute'+(idle===60?'':'s'):idle+' s')+' with no new move'+
+    (own.length?' ('+own.join(', ')+')':'')+', or '+lease+' s after this page closes, sleeps or loses its connection.';
+}
+function ask(){ if(!ready()) return; clearTimeout(askT); const rid=nextRid(); waiting[rid]='ask'; send({t:'arm',q:1,rid:rid});
+  askT=setTimeout(()=>{ askT=null; if(!robot&&online) say("No arm answered. Check that arm_body.py and arm_config.py are on the Pico, that its chip software is up to date (the USB installer, build step 02), and what the 'arm:' line in the Pico's console (Thonny) says at power-on.",true); },ASK_MS); }
+const ERR={bad_angles:'the robot refused those angles',unknown_pose:'this arm has no pose by that name',nothing_to_do:'nothing to move',arm_fault:"the arm hit a fault and let go. Check the Pico's console (Thonny)"};
+function onAck(m){
+  if(typeof m.rid!=='string'||m.rid.indexOf(RID)!==0) return;   // another page's reply on the same code
+  if(m.rid===stopRid){ stopRid=null; say('stopped: the arm and the wheels or legs are limp'); trace('ack STOP ok='+m.ok,'net'); return; }
+  const what=waiting[m.rid]; delete waiting[m.rid];
+  trace('ack '+m.rid+' ok='+m.ok+(m.queued_ms!=null?' queued_ms='+m.queued_ms:'')+(m.arm?' arm='+m.arm:'')+(m.error?' error='+m.error:''),m.ok?'net':'err');
+  if(what==='ask'){
+    if(!m.ok) say(ERR[m.error]||('the robot said no: '+(m.error||'unknown')),true);
+    else if(took(m)) say('arm found: '+robot.n+' joints ('+robot.names.join(', ')+')');
+    else say('the robot answered, but not like an arm this page knows. Copy arm_body.py from growbot.dev again.',true);
+    return; }
+  if(robot&&typeof m.arm==='string'){ seen=row(m.arm,robot.n)||seen; paintAim(); }
+  if(!m.ok){ say(ERR[m.error]||('the robot said no: '+(m.error||'unknown')),true); return; }
+  if(what==='move') say('moving, done in '+secs(m.queued_ms));
+  else if(what==='letgo') say('the arm let go');
+  else if(what==='pose'){ say('pose playing, done in '+secs(m.queued_ms)); clearTimeout(refreshT); refreshT=setTimeout(ask,Math.min(15000,(+m.queued_ms||0)+250)); }   // then read where it ended up
+}
+
+// ── connect by pairing code (lowercase: the relay's rooms are case-sensitive and the codes are lowercase hex) ──
+function disconnect(){ cancelSends(); clearTimeout(askT); askT=null; clearTimeout(refreshT); keepOff(); stopRid=null;
+  if(body){ const b=body; body=null; try{ b.close(); }catch(e){} } online=false; dot(false); }
+function connect(){
+  const c=$('code').value.trim().toLowerCase();
+  disconnect(); code=c; robot=null; seen=null; buildJoints(); buildPoses();
+  if(!c){ say("enter your robot's pairing code"); return; }
+  $('code').value=c;
+  try{ history.replaceState(null,'',location.pathname+'?id='+encodeURIComponent(c)); }catch(e){}   // a bookmark keeps the code
+  const b=new RelayBody(c,{
+    onStatus:a=>{ if(body!==b) return; online=!!a; dot(online);
+      if(online){ say('robot '+c+' is online, asking about its arm…'); trace('robot online','net'); ask(); keepOn(); }
+      else { keepOff(); say('no robot on '+c+' yet. Is it switched on?'); trace('robot offline','net'); } },
+    onAck:m=>{ if(body===b) onAck(m); }
+  });
+  body=b; b.connect(); say('looking for '+c+'…'); trace('attaching to '+c,'net');
+}
+// typing a code and tapping connect fires change, then click: one connection, not two. Connect on the same code
+// while it is online asks the arm again instead.
+function codeNow(){ return $('code').value.trim().toLowerCase(); }
+$('go').addEventListener('click',()=>{ if(body&&codeNow()===code){ if(online) ask(); return; } connect(); });
+$('code').addEventListener('change',()=>{ if(!body||codeNow()!==code) connect(); });
+
+let start=qp.get('id');
+if(start===null){ try{ start=localStorage.getItem('gb_walk_id')||''; }catch(e){ start=''; } }   // read only: never written here
+$('code').value=String(start||'').trim().toLowerCase();
+buildJoints(); buildPoses();
+if($('code').value) connect(); else say("enter your robot's pairing code");
+</script></body></html>

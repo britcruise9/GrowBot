@@ -376,10 +376,16 @@ function vmCompare(refs,c,kind,auto,job,task){
    It changes the HELPER ONLY. The ordinary agent keeps whatever brain it had: this function is
    reached from vmCompareLoaded and nowhere else. A local server, a free-tier choice and any brain
    the person picked themselves all keep their own lane, so this only ever redirects the house
-   default. ?vmcompare=off is the A/B control arm. */
+   default. ?vmcompare=off is the A/B control arm.
+
+   1112: z-ai/glm-5.3-flash is redirected the same way. It becomes the config default, and a
+   default creature's picture memory must keep running as it does today: on 2.5 Flash with the
+   strict schema (callModel applies that schema to 2.5 and 3.8 Flash only). GLM on up to 13
+   pictures with plain json_object is unmeasured. As with 3.8, the helper sees only the slug, so
+   a person who picked GLM on the dial is redirected too. */
 function vmCompareSlug(slug,local){
   try{
-    if(local||slug!=="google/gemini-3.8-flash")return slug;
+    if(local||(slug!=="google/gemini-3.8-flash"&&slug!=="z-ai/glm-5.3-flash"))return slug;
     if(typeof brainChoice==="function"&&brainChoice()==="free")return slug;
     var picked=new URLSearchParams(location.search).get("vmcompare");
     if(picked==="off"||picked==="same")return slug;
@@ -900,7 +906,7 @@ function vmSetOn(on){ try{ if(on&&localStorage.getItem("gb_vismem_replace/"+vmNs
 function vmManage(){ vmLoad().catch(function(){}).then(function(){ var existing=document.getElementById("vmManage"); if(existing) existing.remove();
   var d=document.createElement("dialog"); d.id="vmManage"; d.style.cssText="box-sizing:border-box;max-width:420px;width:calc(100% - 32px);max-height:80vh;max-height:calc(100dvh - 32px);overflow:auto;background:#101922;color:#e7f1eb;border:1px solid #4b685b;border-radius:18px;padding:22px;font:15px/1.5 system-ui";
   var title=document.createElement("h2"); title.textContent="Visual memories"; title.style.marginTop="0"; d.appendChild(title);
-  var note=document.createElement("p"); note.textContent=(localStorage.getItem("gb_vismem_replace/"+vmNs())?"Previous creature’s references are held and cannot be used. Choose Forget all to finish clearing them. ":"")+"Saved on this device for this creature. Remembering uses the eye already open; comparisons send saved views to your selected brain and use its usual credits. Saved images stay out of your soul file, Pack Me Up and Watch. Ordinary conversation still follows your usual memory and diary choices. Deleting here cannot recall pictures already sent to the brain provider."; d.appendChild(note);
+  var note=document.createElement("p"); note.textContent=(localStorage.getItem("gb_vismem_replace/"+vmNs())?"Previous creature’s references are held and cannot be used. Choose Forget all to finish clearing them. ":"")+"Saved on this device for this creature. Remembering uses the eye already open; comparisons send saved views to your selected brain and use its usual credits. Saved images stay out of your soul file and Watch, so they stay on this device if he moves. Ordinary conversation still follows your usual memory and diary choices. Deleting here cannot recall pictures already sent to the brain provider."; d.appendChild(note);
   function close(){ if(d.close) d.close(); d.remove(); }
   function button(label,fn){ var b=document.createElement("button"); b.textContent=label; b.style.cssText="margin:6px 8px 6px 0;padding:10px;border-radius:10px"; b.onclick=fn; d.appendChild(b); return b; }
   if(!_vmRefs.length){ var empty=document.createElement("p"); empty.textContent=!_vmLoaded?"Saved visual memories could not be read. You can still turn memory off or try forgetting all.":"No saved visual memories yet. You can simply say ‘remember this’ when the subject is clear."; d.appendChild(empty); }
@@ -913,14 +919,32 @@ function vmManage(){ vmLoad().catch(function(){}).then(function(){ var existing=
 function vmLogReply(raw){ try{ var o=JSON.parse(String(raw)); if(o&&o.visual_memory){ delete o.visual_memory; return JSON.stringify(o); } }catch(e){ if(/["']visual_memory["']\s*:/.test(String(raw))) return "[visual memory action omitted]"; } return String(raw); }
 
 
+/* 1027 (Brit, "Fix + creature tag"): HIS OWN FILE KEEPS HIS PICTURES. Every other soul is a different creature, so
+   this phone's pictures are held (the persisted gb_vismem_replace key) BEFORE the write and deleted by the next boot
+   (vmBoot), as before. Same creature = the incoming snapshot's creature tag equals the stored soul's (soul.js
+   soulSameCreature); a missing tag on either side, a template, any gallery soul is different. A hold already standing
+   (an earlier replacement whose cleanup failed) is left as it is: those pictures were never his. */
 function vmReplaceSoul(s){ if(!s||typeof s!=="object"||typeof applySoul!=="function") return false;
   if(typeof soulOwned==="function"&&!soulOwned()) return false;
-  var ns=vmNs(), key="gb_vismem_replace/"+ns, before, prior;
-  try{ before=localStorage.getItem("pb2_soul"); prior=localStorage.getItem(key); localStorage.setItem(key,"1"); }catch(e){ toast("Could not protect the previous visual memories. Please try again."); return false; }
+  var ns=vmNs(), key="gb_vismem_replace/"+ns, before, prior, keep=false;
+  try{ before=localStorage.getItem("pb2_soul"); prior=localStorage.getItem(key); }catch(e){ toast("Could not protect the previous visual memories. Please try again."); return false; }
+  try{ keep=typeof soulSameCreature==="function"&&soulSameCreature(s,JSON.parse(before||"null")); }catch(e){ keep=false; }   // an unreadable stored soul is never "the same"
+  if(!keep){ try{ localStorage.setItem(key,"1"); }catch(e){ toast("Could not protect the previous visual memories. Please try again."); return false; } }
   vmInvalidate("replacement"); var applied=false; try{ applied=applySoul(s); }catch(e){}
   if(applied){ location.reload(); return true; } // boot cleans up under the persisted hold; no delayed old-soul write window
-  try{ if(localStorage.getItem("pb2_soul")===before){ if(prior===null) localStorage.removeItem(key); else localStorage.setItem(key,prior); } }catch(e){}
+  if(!keep){ try{ if(localStorage.getItem("pb2_soul")===before){ if(prior===null) localStorage.removeItem(key); else localStorage.setItem(key,prior); } }catch(e){} }
   setErr("that soul could not be saved. Your visual references have not been deleted."); return false; }
+/* 1027: the same hold for a door that brings in a DIFFERENT creature without applySoul: the ?adopt=1 v2 fold removes
+   pb2_soul and loadSoul folds the v2 keys. Same key, same boot cleanup. No owner yet means no pictures to hold.
+   False only when storage refused the write (the fold then stops and offers a retry). */
+function vmHoldReplace(){ var ns=vmNs(), key="gb_vismem_replace/"+ns; if(!ns) return true; try{ localStorage.setItem(key,"1"); return localStorage.getItem(key)==="1"; }catch(e){ return false; } }
+/* 1027: how many pictures this phone holds for this owner, for the bring one in question. -1 = could not read them
+   (or no answer in 1.5 s, so a stuck store never strands the question). 1027 review: PICTURES, not memories: every
+   saved view counts (a memory holds 1 to VM_MAX_VIEWS), because every one of them is deleted. */
+function vmCount(){ if(!vmNs()) return Promise.resolve(0);
+  return new Promise(function(res){ var done=false; function fin(n){ if(!done){ done=true; res(n); } }
+    setTimeout(function(){ fin(-1); },1500);
+    try{ vmLoad().then(function(rs){ if(!_vmLoaded||!Array.isArray(rs)){ fin(-1); return; } var n=0; rs.forEach(function(r){ n+=(r&&Array.isArray(r.views))?r.views.length:1; }); fin(n); },function(){ fin(-1); }); }catch(e){ fin(-1); } }); }
 function vmBoot(){ vmSyncOwner(); var pending=false; try{ pending=!!localStorage.getItem("gb_vismem_replace/"+vmNs()); }catch(e){}
   if(!pending){ vmLoad().then(function(){ vmLibLog("boot"); },function(){}); return; }
   return vmForgetAll().then(function(r){ if(r.status!=="forgotten") toast("Previous visual memories are held. Open Visual memories and retry Forget all.",10000); return r; }); }

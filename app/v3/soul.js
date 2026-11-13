@@ -14,6 +14,7 @@
                      owner/selfName and replyLanguage/inputLanguage — direct person choices
      scratch       — FAST LOOP (dream prunes rules)
      log           — append-only
+     creatureTag   — MINTED ONCE (soulEnsureTag), then never written again. Travels only with a SNAPSHOT.
      persona/dream/harness/body/meta/expression — load-time config (applySoul), read via S()
 
    SAFETY: SAFETY_FLOOR lives in the engine (prompts.js) and is ALWAYS appended
@@ -48,6 +49,40 @@ function soulClean(s, n) {
 }
 
 var IDENTITY_CORE_CAP = 240;
+
+/* 1027 THE CREATURE TAG (Brit picked "Fix + creature tag", review internal notes).
+   The pictures he saves (visual-memory.js) live in this browser's IndexedDB, never in the soul file, and
+   bringing a soul in deletes them, because nothing said whether the file was HIM. Now every soul carries
+   one opaque random tag, "c" + 32 hex (128 bits from crypto.getRandomValues). Same tag = same creature:
+   bringing back his own file keeps his pictures (vmReplaceSoul). A missing tag on either side counts as a
+   different creature, so an old file or an old soul wipes exactly as before.
+   WHAT IT IS NOT: never a device id, sid, key, code or anything a server reads, and never a way to move
+   money; it rides only inside pb2_soul and the snapshot file. No prompt reads it (buildSystem, the dream
+   and the journal peek all read named fields only).
+   THE identityCore RULES: minted once when a soul has none (a birth, an old soul's first load, an import
+   without one), then never edited. It travels ONLY with a SNAPSHOT, so a template (become, a template
+   download, every gallery adopt, which forces template) is a new creature and gets its own. Starting over
+   removes pb2_soul, and the next load mints a new one. A context without crypto (a bare test vm) mints
+   nothing, which reads as "different creature" everywhere: the old behaviour, never a false match. */
+var SOUL_TAG_RE = /^c[0-9a-f]{32}$/;
+function soulTagOf(s) { var t = (s && typeof s === "object") ? s.creatureTag : ""; return (typeof t === "string" && SOUL_TAG_RE.test(t)) ? t : ""; }
+function soulMintTag() {
+  var c = (typeof crypto !== "undefined" && crypto && typeof crypto.getRandomValues === "function") ? crypto : null;
+  if (!c) return "";
+  var b = new Uint8Array(16), h = "c", i;
+  try { c.getRandomValues(b); } catch (e) { return ""; }
+  for (i = 0; i < b.length; i++) h += (b[i] < 16 ? "0" : "") + b[i].toString(16);
+  return h;
+}
+function soulEnsureTag(s) { if (s && typeof s === "object" && !soulTagOf(s)) { var t = soulMintTag(); if (t) s.creatureTag = t; } return s; }
+/* is this FILE the creature already stored here? Only a tag the file would really bring in counts (soulFromFile: a
+   snapshot's), so a template carrying a stray tag is still a different creature. Runs on a copy; never touches either. */
+function soulSameCreature(raw, stored) {
+  var mine = soulTagOf(stored), theirs = "";
+  if (!mine || !raw || typeof raw !== "object") return false;
+  try { theirs = soulTagOf(soulFromFile(JSON.parse(JSON.stringify(raw)))); } catch (e) { theirs = ""; }
+  return !!theirs && theirs === mine;
+}
 
 /* 0928 BIG MEMORY (Brit, card expanded-soul: "Yes, build it" + "let's make it default for all growbots").
    0929 ALWAYS ON (Brit: "i don't think we need toggle there let's just have it on always"): there is no
@@ -256,6 +291,7 @@ function loadSoul() {
   } else {
     s = migrateLegacy();                    // legacy split keys only (or nothing) → fresh+migrate
   }
+  soulEnsureTag(s);                         // 1027: a birth, or an old soul's first load on this build, gets its creature tag here; the boot save keeps it
   SOUL = s;
   snapshotBase(s);   // 0906: the three-way merge's base = what this tab loaded
   return s;
@@ -352,7 +388,7 @@ function nameBlock(s, third) {
      person ("Its person's name, as they told it: ..."). One function so the precedence rule can
      never say two different things in the two lanes; two voices so neither prompt reads as a graft. */
   if (third) return n ? ("\n\nIts own name, which its person gave and confirmed: " + n + ". Older writing may still call it something else — that is history, and this name outranks it. You cannot change this name: it is not yours to write.") : "";
-  if (!n) return "\n\n== YOUR NAME ==\nyou have no name of your own yet, and you are allowed to want one. If a name feels like you, ASK for it in your own words — \"Call me Buddy?\" — and set name_proposal to it. If your person offers you one instead, say it back and check — \"Buddy — is that my name?\". Either way it is only yours once they say yes, so ask once and let it rest; never take your person's own name, and never claim a name just because someone said one nearby.";
+  if (!n) return "\n\n== YOUR NAME ==\nyou have no name of your own yet, and you are allowed to want one. If a name feels like you, ASK for it in your own words and set name_proposal to it. If your person offers you one instead, say it back and check. Either way it is only yours once they say yes, so ask once and let it rest; never take your person's own name, and never claim a name just because someone said one nearby.";
   return "\n\n== YOUR NAME ==\nyour person named you " + n + ". that is your name: answer to it. older writing may still call you something else — the seed line \"I am Sprout\", a sentence in your identity, a page of your diary — that is HISTORY, not a correction, and " + n + " outranks all of it. your person's name is a different thing and never yours. you cannot rename yourself: only your person can, by telling you and confirming it.";
 }
 // Stored language choices are canonical codes only. Keep this independent of prompts.js so
@@ -383,6 +419,7 @@ function normalizeSoul(s) {
   if (!Array.isArray(s.log)) s.log = [];
   if (typeof s.identity !== "string" || s.identity.length < 20) s.identity = SEED_IDENTITY;
   s.identityCore = (typeof s.identityCore === "string") ? soulClean(s.identityCore, IDENTITY_CORE_CAP) : "";   // untrusted on import like every other string: same strip + header-collapse (==+ -> =) + cap; a non-string (forged object/array) becomes "" so it can never reach a prompt
+  if (s.creatureTag !== undefined && !soulTagOf(s)) delete s.creatureTag;   // 1027: a valid tag is kept exactly; anything else (a hand edit, a forged object) is dropped and reads as a different creature. Never minted here: normalizeSoul runs on copies and fragments too
   return s;
 }
 
@@ -445,6 +482,25 @@ function snapshotBase(s) {
   try { Object.defineProperty(s, "_base", { value: b, enumerable: false, writable: true, configurable: true }); } catch (e) { s._base = b; }
 }
 function unionList(a, b, cap) { var seen = {}, out = []; (a || []).concat(b || []).forEach(function (x) { var k = typeof x === "string" ? x : JSON.stringify(x); if (k && !seen[k]) { seen[k] = 1; out.push(x); } }); return cap ? out.slice(-cap) : out; }
+/* 1109 FORGET ONE RULE: the x in My thoughts (next.html forgetRule) leaves a TOMBSTONE in scratch.rulesGone, a short
+   hash of the rule's exact text (never its words, so the file, the journal and Edit Brain never hold what the person
+   removed, and no prompt reads the field). Without it, a page that still held the rule in memory (a second tab, or an
+   older page restored by Back) put it straight back through the rules union below the next time it saved. A soul the
+   x was never tapped on has no rulesGone, and its merge is exactly the union it always was. */
+var RULES_GONE_RE = /^r[0-9a-f]{8}$/;
+function ruleKey(t) { var s = String(t == null ? "" : t), h = 5381, i; for (i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return "r" + ("0000000" + (h >>> 0).toString(16)).slice(-8); }
+function rulesGoneOf(sc) { return (sc && Array.isArray(sc.rulesGone)) ? sc.rulesGone.filter(function (k) { return typeof k === "string" && RULES_GONE_RE.test(k); }) : []; }
+function mergeRulesGone(newer, s) {
+  var gN = rulesGoneOf(newer.scratch), gS = rulesGoneOf(s.scratch);
+  if (!gN.length && !gS.length) return;                                        // nobody tapped the x: the union stands as it always did
+  var theirs = (newer.scratch && Array.isArray(newer.scratch.rules)) ? newer.scratch.rules : [], gone = {}, have = {};
+  gN.forEach(function (k) { gone[k] = 1; });
+  // the stored side forgot it and does not carry it: a copy only this memory still holds is stale, so it stays gone
+  s.scratch.rules = s.scratch.rules.filter(function (r) { return !(gone[ruleKey(r)] && theirs.indexOf(r) < 0); });
+  // a tombstone whose rule is back (taught again since) is spent; the rest travel on, newest kept
+  s.scratch.rules.forEach(function (r) { have[ruleKey(r)] = 1; });
+  s.scratch.rulesGone = unionList(gN, gS).filter(function (k) { return !have[k]; }).slice(-SOUL_CAPS_BIG.rules);
+}
 function mergeGoals(newer, s) {
   var baseJ = (s._base && s._base.goals) || null, mine = s.goals || {}, theirs = newer.goals || {};
   var mineJ = JSON.stringify(mine), theirJ = JSON.stringify(theirs);
@@ -474,11 +530,13 @@ function unionByTime(a, b, field) {
 }
 function mergeSoulInto(newer, s) {
   s.log = unionByTime(newer.log, s.log, "txt");   // 0928: a merge keeps every line; the next diary write rolls it back under the cap (soulRoll)
+  if (soulTagOf(newer)) s.creatureTag = newer.creatureTag;   // 1027: the stored tag wins, so two tabs that each minted one for the same untagged soul settle on the first one saved
   if ((+newer.identityAt || 0) > (+s.identityAt || 0) && typeof newer.identity === "string" && newer.identity.length >= 20) {
     s.identity = newer.identity; s.identityCore = (typeof newer.identityCore === "string") ? newer.identityCore : s.identityCore; s.identityAt = newer.identityAt;
   }
   mergeGoals(newer, s);
   if (newer.scratch && s.scratch && Array.isArray(newer.scratch.rules) && Array.isArray(s.scratch.rules)) s.scratch.rules = unionList(newer.scratch.rules, s.scratch.rules);   // 0928: uncapped, same reason as the log above
+  if (newer.scratch && s.scratch && Array.isArray(s.scratch.rules)) mergeRulesGone(newer, s);   // 1109: a rule the person forgot (the x) stays forgotten; a no-op unless a side carries a tombstone
   /* 0928: bright moments were never merged, so a stale tab's ordinary save wiped every glow another tab
      had marked (up to 20 now). Same union as the diary. A glow that is not {t, g} (never written by v3)
      is left out of the union only when the other tab has glows to merge in. */
@@ -487,6 +545,9 @@ function mergeSoulInto(newer, s) {
      rest of scratch, so a stale tab's save would put an older one back. The newer one wins. */
   var _ldN = newer.scratch && newer.scratch.lastDream, _ldS = s.scratch && s.scratch.lastDream;
   if (s.scratch && _ldN && typeof _ldN === "object" && (+_ldN.t || 0) > ((_ldS && typeof _ldS === "object") ? (+_ldS.t || 0) : 0)) s.scratch.lastDream = _ldN;
+  /* 1021: the dream rule (next.html _dreamDue) reads scratch.dreamAt and scratch.pt. The newer dream wins, with the
+     turns counted since it, so a tab that takes the writer back cannot re-dream right after another tab's dream. */
+  if (s.scratch && newer.scratch && (+newer.scratch.dreamAt || 0) > (+s.scratch.dreamAt || 0)) { s.scratch.dreamAt = +newer.scratch.dreamAt; s.scratch.pt = +newer.scratch.pt || 0; }
   s.merged = (s.merged | 0) + 1;
 }
 function adoptStore(s) { var st = readStoredSoul(); if (st && (+st.rev || 0) > (+s.rev || 0)) mergeSoulInto(st, s); s.readOnly = true; return false; }
@@ -747,7 +808,7 @@ function sanitizeSoulCfg(raw) {
    Honors meta.kind: "template" (born fresh from seeds) vs "snapshot" (restore a grown creature). ---- */
 function applySoul(raw) {
   if (!raw || typeof raw !== "object") return false;
-  var s = normalizeSoul(soulFromFile(raw));
+  var s = soulEnsureTag(normalizeSoul(soulFromFile(raw)));   // 1027: his own snapshot keeps its tag; a template or an untagged file is a new creature and gets one
   soulToCeiling(s);                         // 0928: only a file PAST the ceiling loses anything, and next.html asks first (importOverflow)
   // Adoption replaces the creature on this device. Ordinary saveSoul merges stale
   // sessions; a fresh import must not merge the previous creature into the backup.
@@ -794,6 +855,7 @@ function soulFromFile(raw) {
   // unconditionally would birth a creature whose append-once region already held the UPLOADER's bond
   // line — the write-once door shut from birth, and its own bond could never be written.
   s.identityCore = (kind === "snapshot" && typeof raw.identityCore === "string") ? soulClean(raw.identityCore, IDENTITY_CORE_CAP) : "";
+  if (kind === "snapshot" && soulTagOf(raw)) s.creatureTag = raw.creatureTag;   // 1027: the creature tag follows the core's rule: only a SNAPSHOT is the same creature
   if (kind === "template") {
     s.log = []; s.bornAt = 0;
     s.scratch = { state: "awake and curious", mood: (scrIn && scrIn.mood) || { v: 0.3, e: 0.5 },
@@ -836,6 +898,7 @@ function currentSoul(kind, rt, meta) {
       ? ((rt && typeof rt.identityCore === "string") ? rt.identityCore : (typeof SOUL.identityCore === "string" ? SOUL.identityCore : ""))
       : ""
   };
+  if (kind === "snapshot") { var _tag = soulTagOf(rt) || soulTagOf(SOUL); if (_tag) soul.creatureTag = _tag; }   // 1027: same fallback as the core: the callers pass no tag, so the live SOUL's travels. A TEMPLATE never carries one (it is a new creature)
   if (SOUL.body || (rt && rt.body)) soul.body = SOUL.body || rt.body;
   if (SOUL.expression) soul.expression = SOUL.expression;
   if (kind === "snapshot" && rt) { soul.goals = rt.goals; soul.scratch = rt.scratch; soul.log = rt.log; soul.bornAt = 1; }
@@ -853,5 +916,7 @@ if (typeof module !== "undefined" && module.exports) {
     SOUL_CAPS_USUAL: SOUL_CAPS_USUAL, SOUL_CAPS_BIG: SOUL_CAPS_BIG, soulBigMemory: soulBigMemory, soulLimits: soulLimits, soulRoll: soulRoll,
     soulFit: soulFit, fitIdentity: fitIdentity, importOverflow: importOverflow, mergeSoulInto: mergeSoulInto,
     readStoredSoul: readStoredSoul, snapshotBase: snapshotBase, cleanDreamLimits: cleanDreamLimits, inTimeOrder: inTimeOrder,
+    soulTagOf: soulTagOf, soulMintTag: soulMintTag, soulEnsureTag: soulEnsureTag, soulSameCreature: soulSameCreature,
+    ruleKey: ruleKey, rulesGoneOf: rulesGoneOf, mergeRulesGone: mergeRulesGone,
     _setSOUL: function (x) { SOUL = x; }, _getSOUL: function () { return SOUL; } };
 }
